@@ -1,4 +1,5 @@
 CC = g++
+CFLAGS = -Wall
 OUTPUT = main
 #INCLUDE = -I/usr/include/flycapture
 #LIBS = -L../../lib/C -lflycapture-c${D} -L../../lib -lflycapture${D}
@@ -13,3 +14,4 @@ ${OUTPUT}.o: main.cpp
 
 clean:
 	rm -f ./*.o ./*.d ./${OUTPUT}
+
