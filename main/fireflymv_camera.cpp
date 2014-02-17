@@ -96,3 +96,6 @@ fc2SetImageData(
     fc2Image* pImage,
     const unsigned char* pData,
     unsigned int dataSize);
+
+
+

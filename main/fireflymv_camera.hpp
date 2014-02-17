@@ -1,4 +1,6 @@
 
+#ifndef _FIREFLYMV_CAMERA_HPP_
+#define _FIREFLYMV_CAMERA_HPP_
 
 #include "C/FlyCapture2_C.h"
 
@@ -16,3 +18,6 @@ class ffmv_camera {
       fc2Context context;
       fc2PGRGuid guid;
 };
+
+#endif /* ifndef _FIREFLYMV_CAMERA_HPP_ */
+
