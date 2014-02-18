@@ -1,5 +1,5 @@
 CC = g++
-CFLAGS = -Wall
+CFLAGS = -Wall -O3
 OUTPUT = main
 #INCLUDE = -I/usr/include/flycapture
 #LIBS = -L../../lib/C -lflycapture-c${D} -L../../lib -lflycapture${D}
