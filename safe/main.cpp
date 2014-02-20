@@ -5,6 +5,7 @@
 #include "cvwin.hpp"
 #include "opencv2/opencv.hpp"
 #include <string>
+#include <iostream>
 
 inline void lane_marker_filter( const cv::Mat &src, cv::Mat &dst );
 inline void show_hough( cv::Mat &dst, const std::vector<cv::Vec4i> lines );
@@ -23,28 +24,42 @@ int main( int argc, char* argv[] ) {
     if ( argv[1][0] != '-' ) return -1;
     switch( argv[1][1] ) {
         case 'i':
+            DMESG( "Creating image frame source" );
             fsrc = new fs_image( argv[2] );
             break;
         case 'v':
+            DMESG( "Creating video frame source" );
             fsrc = new fs_video( argv[2] );
             break;
         case 'c':
+            DMESG( "Creating camera frame source" );
             fsrc = new fs_camera( argv[2] );
             break;
         default:
+            std::cerr << "Unknown argument \"" << argv[1] << '\"' << std::endl;
             return -1;
     }
-    if ( fsrc == NULL ) return -1;
-    if ( fsrc->is_valid() == false ) return -1;
+    if ( fsrc == NULL ) {
+        std::cerr << "Failed to allocate frame source" << std::endl;
+        return -1;
+    }
+    if ( fsrc->is_valid() == false ) {
+        std::cerr << "Frame source is invalid" << std::endl;
+        delete fsrc;
+        return -1;
+    }
     DMESG( "Frame source is valid" );
 
     // Request and process frames until source indicates EOF
     while ( fsrc->get_frame( frame ) == 0 ) {
+        // Filter frame for gradient steps up/down horizontally -> lmf_frame
         lane_marker_filter( frame, lmf_frame );
 
+        // Perform Canny edge detection on lmf_frame -> lmf_frame
         // src, dst, low threshold, high threshold, kernel size, accurate
         Canny( lmf_frame, lmf_frame, 100, 200, 3, false );
 
+        // Perform Hough transform on lmf_frame, generating vector of lines
         // src, dst vec, rho, theta, threshold, min length, max gap
         // rho - distance resolution of accumulator in pixels
         // theta - angle resolution of accumulator in pixels
@@ -71,12 +86,12 @@ int main( int argc, char* argv[] ) {
         // dilation of mask_frame -> mask_frame
         // remove mask_frame from i_frame -> ip_frame
         // ip_mu and ip_sigma of ip_frame pixels values calculated
-        // i_frame thresholded above ip_mu + ( 3 * ip_sigma ) -> il_frame
-        // i_frame thresholded below ip_mu - ( 3 * ip_sigma ) -> io_frame
+        // threshold i_frame above ip_mu + ( 3 * ip_sigma ) -> il_frame
+        // threshold i_frame below ip_mu - ( 3 * ip_sigma ) -> io_frame
         // lane filter applied to i_frame -> l_frame
         // l_mu and l_sigma of l_frame pixel values calculated
-        // l_frame thresholded above l_mu + l_sigma -> ll_frame
-        // l_frame thresholded below l_mu - l_sigma -> lpo_frame
+        // threshold l_frame above l_mu + l_sigma -> ll_frame
+        // threshold l_frame below l_mu - l_sigma -> lpo_frame
         // ll_mu and ll_sigma of ll_frame pixels values calculated
         // lpo_mu and lpo_sigma of lpo_frame pixels values calculated
         // EM stuff using calculated parameters ... ?
@@ -96,7 +111,7 @@ int main( int argc, char* argv[] ) {
 
     // Pause if no key was pressed during processing loop
     if ( !SINGLE_STEP ) while( key < 0 ) key = cv::waitKey( 1 );
-    
+
     delete fsrc;
     return 0;
 }

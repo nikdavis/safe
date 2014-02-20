@@ -6,6 +6,9 @@
 #include "opencv2/opencv.hpp"
 #include <string>
 
+// All derived classes implement get_frame. This member function is passed a
+// Mat by reference. If a frame is available, the Mat is filled and the func
+// returns 0. Once all frames are depleted, -1 is retuned.
 class frame_source {
     public:
         frame_source( void ) : valid( false ) {};
@@ -42,6 +45,8 @@ class fs_video : public frame_source {
        cv::VideoCapture video;
 };
 
+class FireflyMVCamera; // Forward declare Firefly camera class
+
 class fs_camera : public frame_source {
     public:
         fs_camera( std::string number );
@@ -50,7 +55,7 @@ class fs_camera : public frame_source {
         int get_frame( cv::Mat &frame );
 
     private:
-        int camera_select;
+        FireflyMVCamera *pFFCam;
 };
 
 #endif // ifndef _FSOURCE_HPP_
