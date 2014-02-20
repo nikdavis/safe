@@ -85,8 +85,8 @@ int main (int argc, char * const argv[])
         Mat prediction = KF.predict();
         Point predictPt(prediction.at<float>(0),prediction.at<float>(1));
 
-        measurement(0) = mouse_info.x+(((rand()/(float)RAND_MAX)-0.5)*10.0);
-        measurement(1) = mouse_info.y+(((rand()/(float)RAND_MAX)-0.5)*20.0);
+        measurement(0) = mouse_info.x+(((rand()/(float)RAND_MAX)-0.5)*100.0);
+        measurement(1) = mouse_info.y+(((rand()/(float)RAND_MAX)-0.5)*100.0);
 
         Point measPt(measurement(0),measurement(1));
         mousev.push_back(measPt);
