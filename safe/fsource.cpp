@@ -2,11 +2,16 @@
 
 #include "defs.hpp"
 #include "fsource.hpp"
+#include "fireflymv_camera.hpp"
+#include <iostream>
 
 // fs_image
 fs_image::fs_image( std::string file ) {
     image = cv::imread( file, CV_LOAD_IMAGE_GRAYSCALE );
-    if ( image.data == NULL ) return;
+    if ( image.data == NULL ) {
+        std::cerr << "Failed to open image \"" << file << '\"' << std::endl;
+        return;
+    }
     used = false;
     valid = true;
 }
@@ -14,7 +19,6 @@ fs_image::fs_image( std::string file ) {
 fs_image::~fs_image( void ) {}
 
 int fs_image::get_frame( cv::Mat &frame ) {
-    if ( valid == false ) return -1;
     if ( used ) return - 1;
     frame = image;
     used = true;
@@ -23,33 +27,51 @@ int fs_image::get_frame( cv::Mat &frame ) {
 
 // fs_video
 fs_video::fs_video( std::string file ) {
+    DMESG( "Opening video file \"" << file << '\"' );
     video.open( file );
-    if ( !video.isOpened() ) return;
+    if ( !video.isOpened() ) {
+        std::cerr << "Failed to open video \"" << file << '\"' << std::endl;
+        return;
+    }
     valid = true;
 }
 
 fs_video::~fs_video( void ) {}
 
 int fs_video::get_frame( cv::Mat &frame ) {
-    if ( valid == false ) return -1;
-    if ( video.read( frame ) == false ) return -1;
-    if( frame.channels() > 1 ) cvtColor( frame, frame, CV_BGR2GRAY );
+    if ( video.read( frame ) == false ) {
+        std::cerr
+        return -1;
+    if ( frame.channels() > 1 ) cvtColor( frame, frame, CV_BGR2GRAY );
     return 0;
 }
 
 // fs_camera
 fs_camera::fs_camera( std::string number ) {
-    if ( std::stringstream(number) >> camera_select ) return;
-    return; // Todo
+    int camera_select;
+    if ( std::stringstream( number ) >> camera_select ) {
+        std::cerr << "Failed to convert \"" << number << "\" to integer"
+                  << std::endl;
+        return;
+    }
+    pFFCam = new FireflyMVCamera( camera_select );
+    if ( pFFCam == NULL ) {
+        std::cerr << "Failed to allocate Firefly camera" << std::endl;
+        return;
+    }
+    if ( !pFFCam->ready() ) {
+        std::cerr << "Failed to initialize Firefly camera" << std:: endl;
+        return;
+    }
     valid = true;
 }
 
-fs_camera::~fs_camera( void ) {}
+fs_camera::~fs_camera( void ) {
+    delete pFFCam;
+}
 
 int fs_camera::get_frame( cv::Mat &frame ) {
-    if ( valid == false ) return -1;
-    return -1; // Todo
-    return 0;
+    return pFFCam->grabFrame( frame );
 }
 
 
