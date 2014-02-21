@@ -3,10 +3,12 @@
 #ifndef _DEFS_HPP_
 #define _DEFS_HPP_
 
+#include <iostream>
+
 typedef unsigned char uchar;
 
 // Pause after processing each frame
-#define SINGLE_STEP             false
+#define SINGLE_STEP             true
 
 // Lane marker filter parameters
 #define ROTATE_TAU              false
@@ -26,7 +28,6 @@ typedef unsigned char uchar;
     } while ( false )
 
 #ifdef DEBUG
-#include <iostream>
 #define DMESG( v ) do { std::cout << v << std::endl; } while ( false )
 #else
 #define DMESG( v ) do { } while ( false )

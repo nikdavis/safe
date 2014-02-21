@@ -10,13 +10,9 @@
 #ifndef _FIREFLYMV_CAMERA_HPP_
 #define _FIREFLYMV_CAMERA_HPP_
 
-
 #include "C/FlyCapture2_C.h"
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
-#include <stdio.h>
-
-
 
 class FireflyMVCamera {
     public:

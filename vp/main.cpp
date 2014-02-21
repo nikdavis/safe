@@ -150,22 +150,22 @@ void processImage(MSAC &msac, int numVps, cv::Mat &imgGRAY, cv::Mat &outputImg, 
 #endif
 
 	// Multiple vanishing points
-	std::vector<std::vector<int> > CS;	// index of Consensus Set for all vps: CS[vpNum] is a vector containing indexes of lineSegments belonging to Consensus Set of vp numVp
+	std::vector<std::vector<int> > CS;	// index of Consensus Set for all vanPt: CS[vpNum] is a vector containing indexes of lineSegments belonging to Consensus Set of vp numVp
 	std::vector<int> numInliers;
 
 	std::vector<std::vector<std::vector<cv::Point> > > lineSegmentsClusters;
 	
 	// Call msac function for multiple vanishing point estimation
-	msac.multipleVPEstimation(lineSegments, lineSegmentsClusters, numInliers, vps, numVps); 
+	msac.multipleVPEstimation(lineSegments, lineSegmentsClusters, numInliers, vanPt, numVps); 
 	
-   if(vps.size() == 0) {
+   if(vanPt.cv::Point::size() == 0) {
       printf("-1,-1\n");
       vanPt.x = -1.0;
       vanPt.y = -1.0;
    } else if
    {
-      //printf("%.3f,%.3f\n", v, vps[v].at<float>(0,0), vps[v].at<float>(1,0));
-	   double vpNorm = cv::norm(vps[v]);
+      //printf("%.3f,%.3f\n", v, vanPt[v].at<float>(0,0), vanPt[v].at<float>(1,0));
+	   double vpNorm = cv::norm(vanPt[v]);
 	   if(fabs(vpNorm - 1) < 0.001)
 	   {
 	   	printf("-1,-1 (inf)\n");
@@ -182,7 +182,7 @@ void processImage(MSAC &msac, int numVps, cv::Mat &imgGRAY, cv::Mat &outputImg, 
    
 		
 	// Draw line segments according to their cluster
-	msac.drawCS(outputImg, lineSegmentsClusters, vps);
+	msac.drawCS(outputImg, lineSegmentsClusters, vanPt);
 }
 
 /** Main function*/
@@ -310,7 +310,7 @@ int main(int argc, char** argv)
 
 
 		// View
-		imshow("Output", outputImg);\
+		imshow("Output", outputImg);
 
 		char q = (char)waitKey(1);
 

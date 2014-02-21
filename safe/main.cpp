@@ -5,7 +5,6 @@
 #include "cvwin.hpp"
 #include "opencv2/opencv.hpp"
 #include <string>
-#include <iostream>
 
 inline void lane_marker_filter( const cv::Mat &src, cv::Mat &dst );
 inline void show_hough( cv::Mat &dst, const std::vector<cv::Vec4i> lines );
@@ -15,20 +14,35 @@ inline bool calc_intersect( const cv::Vec4i l1, const cv::Vec4i l2,
 int main( int argc, char* argv[] ) {
     cvwin win_frame( "frame" );
     cvwin win_hough( "hough" );
-    frame_source* fsrc;
+    frame_source* fsrc = NULL;
     cv::Mat frame, lmf_frame, hough_frame;
     int key = -1;
 
     DMESG( "Parsing arguments" );
-    if ( argc != 3 ) return -1;
-    if ( argv[1][0] != '-' ) return -1;
+    if ( argc < 2 ) {
+        std::cerr << "Usage is " << argv[0] << " -i/-f/-c [file]\n"
+                     "\t-i image\n\t-v video\n\t-c camera" << std::endl;
+        return -1;
+    }
+    if ( argv[1][0] != '-' ) {
+        std::cerr << "Must specify source type -i/-f/-c" << std::endl;
+        return -1;
+    }
     switch( argv[1][1] ) {
         case 'i':
             DMESG( "Creating image frame source" );
+            if ( argc < 3 ) {
+                std::cerr << "No file specified" << std::endl;
+                return -1;
+            }
             fsrc = new fs_image( argv[2] );
             break;
         case 'v':
             DMESG( "Creating video frame source" );
+            if ( argc < 3 ) {
+                std::cerr << "No file specified" << std::endl;
+                return -1;
+            }
             fsrc = new fs_video( argv[2] );
             break;
         case 'c':

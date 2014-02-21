@@ -3,7 +3,6 @@
 #include "defs.hpp"
 #include "fsource.hpp"
 #include "fireflymv_camera.hpp"
-#include <iostream>
 
 // fs_image
 fs_image::fs_image( std::string file ) {

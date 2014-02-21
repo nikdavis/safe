@@ -21,7 +21,7 @@ main.o : main.cpp defs.hpp fsource.hpp
 cvwin.o : cvwin.cpp defs.hpp cvwin.hpp
 	$(CC) $(OCVFLAGS) $(CFLAGS) -c cvwin.cpp
 
-fsource.o : fsource.cpp defs.hpp fsource.hpp
+fsource.o : fsource.cpp defs.hpp fsource.hpp fireflymv_camera.hpp
 	$(CC) $(OCVFLAGS) $(CFLAGS) -c fsource.cpp
 
 fireflymv_camera.o : fireflymv_camera.cpp fireflymv_camera.hpp

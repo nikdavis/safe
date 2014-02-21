@@ -1,81 +1,80 @@
 // FILE: fireflymv_camera.cpp
 
+#include "defs.hpp"
 #include "fireflymv_camera.hpp"
-
-/* Should make this read or configure camera */
-#define  CAMERA_WIDTH   640
-#define  CAMERA_HEIGHT  480
+#include <iostream>
 
 
 /* constructor */
 FireflyMVCamera::FireflyMVCamera() {
     fc2Error error;
     fc2EmbeddedImageInfo embeddedInfo;
-    initialized = 1;
+    initialized = -1;
     frames = 0;
 
     error = fc2CreateContext( &context );
     if ( error != FC2_ERROR_OK )
     {
-        printf( "Error in fc2CreateContext: %d\n", error );
-        initialized = -1;
+        std::cerr << "Error in fc2CreateContext: " << error << std::endl;
+        return;
     }      
 
     error = fc2GetNumOfCameras( context, &camCount );
     if ( error != FC2_ERROR_OK )
     {
-        printf( "Error in fc2GetNumOfCameras: %d\n", error );
-        initialized = -1;
+        std::cerr << "Error in fc2GetNumOfCameras: " << error << std::endl;
+        return;
     }      
 
     if ( camCount == 0 )
     {
-        printf( "Error no cameras available\n");
-        initialized = -1;
+        std::cerr << "Error no cameras available" << std::endl;
+        return;
     }        
 
     // Get the 0th camera
     error = fc2GetCameraFromIndex( context, 0, &guid );
     if ( error != FC2_ERROR_OK )
     {
-        printf( "Error in fc2GetCameraFromIndex: %d\n", error );
-        initialized = -1;
+        std::cerr << "Error in fc2GetCameraFromIndex: " << error << std::endl;
+        return;
     }       
 
     error = fc2Connect( context, &guid );
     if ( error != FC2_ERROR_OK )
     {
-        printf( "Error in fc2Connect: %d\n", error );
-        initialized = -1;
+        std::cerr << "Error in fc2Connect: " << error << std::endl;
+        return;
     }       
 
     error = fc2GetEmbeddedImageInfo( context, &embeddedInfo );
     if ( error != FC2_ERROR_OK )
     {
-        printf( "Error in fc2EmbeddedImageInfo: %d\n", error );
-        initialized = -1;
+        std::cerr << "Error in fc2EmbeddedImageInfo: " << error << std::endl;
+        return;
     }
 
     if ( embeddedInfo.timestamp.available != 0 )
     {       
         embeddedInfo.timestamp.onOff = 1;
     }    
-
     fc2SetEmbeddedImageInfo( context, &embeddedInfo );
 
     error = fc2StartCapture( context );
     if ( error != FC2_ERROR_OK )
     {
-        printf( "Error in fc2StartCapture: %d\n", error );
-        initialized = -1;
+        std::cerr << "Error in fc2StartCapture: " << error << std::endl;
+        return;
     }
 
     error = fc2CreateImage( &image );
     if ( error != FC2_ERROR_OK )
     {
-        printf( "Error in fc2CreateImage: %d\n", error );
-        initialized = -1;
+        std::cerr << "Error in fc2CreateImage: " << error << std::endl;
+        return;
     }
+
+    initialized = 0;
 }
 
 
@@ -87,18 +86,18 @@ FireflyMVCamera::~FireflyMVCamera() {
     error = fc2DestroyImage( &image );
     if ( error != FC2_ERROR_OK )
     {
-        printf( "Error in fc2DestroyImage: %d\n", error );
+        std::cerr << "Error in fc2DestroyImage: " << error << std::endl;
     }
     error = fc2StopCapture( context );
     if ( error != FC2_ERROR_OK )
     {
-        printf( "Error in fc2StopCapture: %d\n", error );
+        std::cerr << "Error in fc2StopCapture: " << error << std::endl;
     }
 
     error = fc2DestroyContext( context );
     if ( error != FC2_ERROR_OK )
     {
-        printf( "Error in fc2DestroyContext: %d\n", error );
+        std::cerr << "Error in fc2DestroyContext: " << error << std::endl;
     }
 }
 
@@ -118,11 +117,11 @@ int FireflyMVCamera::numCameras(void) {
 // give frame buffer to user, we still own it
 int FireflyMVCamera::grabFrame(cv::Mat &retFrame) {
     fc2Error error;
-    error = fc2RetrieveBuffer(context, &image );
 
+    error = fc2RetrieveBuffer(context, &image );
     if ( error != FC2_ERROR_OK )
     {
-        printf( "Error in fc2RetrieveBuffer: %d\n", error );
+        std::cerr << "Error in fc2RetrieveBuffer: " << error << std::endl;
         return -1;
     }
     else {
