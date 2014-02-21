@@ -33,7 +33,7 @@ int main( int argc, char* argv[] ) {
             break;
         case 'c':
             DMESG( "Creating camera frame source" );
-            fsrc = new fs_camera( argv[2] );
+            fsrc = new fs_camera( );
             break;
         default:
             std::cerr << "Unknown argument \"" << argv[1] << '\"' << std::endl;

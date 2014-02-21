@@ -1,10 +1,10 @@
 CC = g++
 OUTPUT = safe
 CFLAGS = -Wall
-OCVFLAGS = `pkg-config --cflags opencv`
-OCVLIBS = `pkg-config --libs opencv`
+OCVFLAGS = -I/usr/include/flycapture `pkg-config --cflags opencv`
+OCVLIBS = -lflycapture-c `pkg-config --libs opencv`
 
-OBJS = fsource.o cvwin.o main.o
+OBJS = fireflymv_camera.o fsource.o cvwin.o main.o
 
 all : CFLAGS += -O3
 all : $(OUTPUT)
@@ -23,6 +23,9 @@ cvwin.o : cvwin.cpp defs.hpp cvwin.hpp
 
 fsource.o : fsource.cpp defs.hpp fsource.hpp
 	$(CC) $(OCVFLAGS) $(CFLAGS) -c fsource.cpp
+
+fireflymv_camera.o : fireflymv_camera.cpp fireflymv_camera.hpp
+	$(CC) $(OCVFLAGS) $(CFLAGS) -c fireflymv_camera.cpp
 
 clean:
 	rm -f *.o $(OUTPUT)

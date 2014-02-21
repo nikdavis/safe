@@ -39,22 +39,14 @@ fs_video::fs_video( std::string file ) {
 fs_video::~fs_video( void ) {}
 
 int fs_video::get_frame( cv::Mat &frame ) {
-    if ( video.read( frame ) == false ) {
-        std::cerr
-        return -1;
+    if ( video.read( frame ) == false ) return -1;
     if ( frame.channels() > 1 ) cvtColor( frame, frame, CV_BGR2GRAY );
     return 0;
 }
 
 // fs_camera
-fs_camera::fs_camera( std::string number ) {
-    int camera_select;
-    if ( std::stringstream( number ) >> camera_select ) {
-        std::cerr << "Failed to convert \"" << number << "\" to integer"
-                  << std::endl;
-        return;
-    }
-    pFFCam = new FireflyMVCamera( camera_select );
+fs_camera::fs_camera( void ) {
+    pFFCam = new FireflyMVCamera();
     if ( pFFCam == NULL ) {
         std::cerr << "Failed to allocate Firefly camera" << std::endl;
         return;

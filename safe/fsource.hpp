@@ -21,7 +21,6 @@ class frame_source {
         bool valid;
 };
 
-
 class fs_image : public frame_source {
     public:
         fs_image( std::string file );
@@ -49,7 +48,7 @@ class FireflyMVCamera; // Forward declare Firefly camera class
 
 class fs_camera : public frame_source {
     public:
-        fs_camera( std::string number );
+        fs_camera( void );
         ~fs_camera( void );
 
         int get_frame( cv::Mat &frame );
