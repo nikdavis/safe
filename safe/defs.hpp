@@ -8,7 +8,7 @@
 typedef unsigned char uchar;
 
 // Pause after processing each frame
-#define SINGLE_STEP             true
+#define SINGLE_STEP             false
 
 // Lane marker filter parameters
 #define ROTATE_TAU              false
