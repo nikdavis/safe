@@ -16,9 +16,11 @@ inline bool calc_intersect( const cv::Vec4i l1, const cv::Vec4i l2,
 int main( int argc, char* argv[] ) {
     cvwin win_frame( "frame" );
     cvwin win_hough( "hough" );
+    timer ltimer( "Lane filter         " );
     timer ctimer( "Canny edge detection" );
     timer htimer( "Hough transform     " );
     timer rtimer( "RANSAC              " );
+    timer ptimer( "Process frame       " );
     frame_source* fsrc = NULL;
     cv::Mat frame, lmf_frame, hough_frame;
     MSAC msac;
@@ -77,8 +79,12 @@ int main( int argc, char* argv[] ) {
 
     // Request and process frames until source indicates EOF
     while ( fsrc->get_frame( frame ) == 0 ) {
+        ptimer.start();
+
         //** Filter frame for gradient steps up/down horizontally -> lmf_frame
+        ltimer.start();
         lane_marker_filter( frame, lmf_frame );
+        ltimer.stop();
 
         //** Perform Canny edge detection on lmf_frame -> lmf_frame
         ctimer.start();
@@ -150,14 +156,18 @@ int main( int argc, char* argv[] ) {
         //** lpo_mu and lpo_sigma of lpo_frame pixels values calculated
         // EM stuff using calculated parameters ... ?
 
+        ptimer.stop();
+
         // Update frame displays
         win_frame.display_frame( frame );
         win_hough.display_frame( hough_frame );
 
         // Print timer results
+        ltimer.printu();
         ctimer.printu();
         htimer.printu();
         rtimer.printu();
+        ptimer.printm();
 
         // Check for key presses and allow highgui to process events
         if ( SINGLE_STEP ) {
@@ -169,9 +179,11 @@ int main( int argc, char* argv[] ) {
     DMESG( "Done processing frames" );
 
     // Print average timer results
+    ltimer.aprintu();
     ctimer.aprintu();
     htimer.aprintu();
     rtimer.aprintu();
+    ptimer.aprintm();
 
     // Pause if no key was pressed during processing loop
     if ( !SINGLE_STEP ) while( key < 0 ) key = cv::waitKey( 1 );
