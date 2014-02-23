@@ -11,14 +11,18 @@
 // returns 0. Once all frames are depleted, -1 is retuned.
 class frame_source {
     public:
-        frame_source( void ) : valid( false ) {};
+        frame_source( void ) : _valid( false ), _width( 0 ), _height( 0 ) {};
         virtual ~frame_source( void ) {};
 
         virtual int get_frame( cv::Mat &frame ) { return -1; }
-        int is_valid( void ) const { return valid; }
+        int is_valid( void ) const { return _valid; }
+
+        int frame_width( void ) const { return _width; }
+        int frame_height( void ) const { return _height; }
 
     protected:
-        bool valid;
+        bool _valid;
+        int _width, _height;
 };
 
 class fs_image : public frame_source {

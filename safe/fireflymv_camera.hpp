@@ -22,9 +22,9 @@ class FireflyMVCamera {
         int ready(void);
         int grabFrame(cv::Mat &frame);
     private:      
-        unsigned int camCount;         // initialized once
-        int initialized;        // if everything goes ok will be 0
-        int frames;
+        unsigned int camCount;      // initialized once
+        int initialized;            // if everything goes ok will be 0
+        int frames; //*** Never actually used?
         fc2Image image;
         fc2Context context;
         fc2PGRGuid guid;

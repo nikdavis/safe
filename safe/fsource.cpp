@@ -5,14 +5,15 @@
 #include "fireflymv_camera.hpp"
 
 // fs_image
-fs_image::fs_image( std::string file ) {
+fs_image::fs_image( std::string file ) : used( false ) {
     image = cv::imread( file, CV_LOAD_IMAGE_GRAYSCALE );
     if ( image.data == NULL ) {
         std::cerr << "Failed to open image \"" << file << '\"' << std::endl;
         return;
     }
-    used = false;
-    valid = true;
+    _width = image.cols;
+    _height = image.rows;
+    _valid = true;
 }
 
 fs_image::~fs_image( void ) {}
@@ -32,7 +33,9 @@ fs_video::fs_video( std::string file ) {
         std::cerr << "Failed to open video \"" << file << '\"' << std::endl;
         return;
     }
-    valid = true;
+    _width = (int) video.get( CV_CAP_PROP_FRAME_WIDTH );
+    _height = (int) video.get( CV_CAP_PROP_FRAME_HEIGHT );
+    _valid = true;
 }
 
 fs_video::~fs_video( void ) {}
@@ -54,7 +57,9 @@ fs_camera::fs_camera( void ) {
         std::cerr << "Failed to initialize Firefly camera" << std:: endl;
         return;
     }
-    valid = true;
+    _width = CAM_WIDTH;
+    _height = CAM_HEIGHT;
+    _valid = true;
 }
 
 fs_camera::~fs_camera( void ) {

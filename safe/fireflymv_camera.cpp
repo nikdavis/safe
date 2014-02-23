@@ -4,8 +4,6 @@
 #include "fireflymv_camera.hpp"
 #include <iostream>
 
-
-/* constructor */
 FireflyMVCamera::FireflyMVCamera() {
     fc2Error error;
     fc2EmbeddedImageInfo embeddedInfo;
@@ -17,20 +15,20 @@ FireflyMVCamera::FireflyMVCamera() {
     {
         std::cerr << "Error in fc2CreateContext: " << error << std::endl;
         return;
-    }      
+    }
 
     error = fc2GetNumOfCameras( context, &camCount );
     if ( error != FC2_ERROR_OK )
     {
         std::cerr << "Error in fc2GetNumOfCameras: " << error << std::endl;
         return;
-    }      
+    }
 
     if ( camCount == 0 )
     {
         std::cerr << "Error no cameras available" << std::endl;
         return;
-    }        
+    }
 
     // Get the 0th camera
     error = fc2GetCameraFromIndex( context, 0, &guid );
@@ -38,14 +36,14 @@ FireflyMVCamera::FireflyMVCamera() {
     {
         std::cerr << "Error in fc2GetCameraFromIndex: " << error << std::endl;
         return;
-    }       
+    }
 
     error = fc2Connect( context, &guid );
     if ( error != FC2_ERROR_OK )
     {
         std::cerr << "Error in fc2Connect: " << error << std::endl;
         return;
-    }       
+    }
 
     error = fc2GetEmbeddedImageInfo( context, &embeddedInfo );
     if ( error != FC2_ERROR_OK )
@@ -55,9 +53,9 @@ FireflyMVCamera::FireflyMVCamera() {
     }
 
     if ( embeddedInfo.timestamp.available != 0 )
-    {       
+    {
         embeddedInfo.timestamp.onOff = 1;
-    }    
+    }
     fc2SetEmbeddedImageInfo( context, &embeddedInfo );
 
     error = fc2StartCapture( context );
@@ -77,10 +75,6 @@ FireflyMVCamera::FireflyMVCamera() {
     initialized = 0;
 }
 
-
-
-
-/* destructor */
 FireflyMVCamera::~FireflyMVCamera() {
     fc2Error error;
     error = fc2DestroyImage( &image );
@@ -88,6 +82,7 @@ FireflyMVCamera::~FireflyMVCamera() {
     {
         std::cerr << "Error in fc2DestroyImage: " << error << std::endl;
     }
+
     error = fc2StopCapture( context );
     if ( error != FC2_ERROR_OK )
     {
@@ -101,35 +96,32 @@ FireflyMVCamera::~FireflyMVCamera() {
     }
 }
 
-
-
 int FireflyMVCamera::ready(void) {
     return (int) (initialized >= 0) ? 1 : 0;
 }
-
-
 
 int FireflyMVCamera::numCameras(void) {
     return (int) camCount;
 }
 
-
 // give frame buffer to user, we still own it
+// *** Potential Memory Leak - is image ever released? ***
+// Clone is also slow, perhaps create grab/release frame funcs, dont copy,
+// then have release free the image data which Mat will not do automatically
 int FireflyMVCamera::grabFrame(cv::Mat &retFrame) {
     fc2Error error;
 
-    error = fc2RetrieveBuffer(context, &image );
+    error = fc2RetrieveBuffer( context, &image );
     if ( error != FC2_ERROR_OK )
     {
         std::cerr << "Error in fc2RetrieveBuffer: " << error << std::endl;
         return -1;
     }
-    else {
-        cv::Mat rawImage(480, 640, CV_8UC1, image.pData, 0);
-        retFrame = rawImage.clone();
-        frames++;
-        return 0;
-    }
+    // constructor: height, width, type, *data, step
+    cv::Mat rawImage( CAM_HEIGHT, CAM_WIDTH, CV_8UC1, image.pData, 0 );
+    retFrame = rawImage.clone();
+    frames++;
+    return 0;
 }
 
 

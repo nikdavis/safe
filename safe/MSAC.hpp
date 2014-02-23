@@ -33,7 +33,6 @@ private:
     int __min_iters;
     int __max_iters;
     bool __reestimate;
-    bool __verbose;
     bool __update_T_iter;
     bool __notify;
 
@@ -63,21 +62,21 @@ private:
 public:
 
     /** Initialisation of MSAC procedure*/
-    void init(int mode, cv::Size imSize, bool verbose=false);
+    void init(int mode, cv::Size imSize);
 
-    /** Main function which returns, if detected, several vanishing points and a vector of containers of line segments
-        corresponding to each Consensus Set.*/
-    void multipleVPEstimation(std::vector<std::vector<cv::Point> > &lineSegments, std::vector<std::vector<std::vector<cv::Point> > > &lineSegmentsClusters, std::vector<int> &numInliers, std::vector<cv::Mat> &vps, int numVps);
+    /** Main function which returns, if detected, a vanishing point and a vector of line segments
+        corresponding to the Consensus Set.*/
+    bool VPEstimation(std::vector<std::vector<cv::Point> > &lineSegments, std::vector<std::vector<std::vector<cv::Point> > > &lineSegmentsClusters, std::vector<int> &numInliers, cv::Mat &vps);
 
     /** Draws vanishing points and line segments according to the vanishing point they belong to*/
-    void drawCS(cv::Mat &im, std::vector<std::vector<std::vector<cv::Point> > > &lineSegmentsClusters, std::vector<cv::Mat> &vps);
+    void drawCS(cv::Mat &im, std::vector<std::vector<std::vector<cv::Point> > > &lineSegmentsClusters, cv::Mat &vp);
 
 private:
     /** This function returns a randomly selected MSS*/
     void GetMinimalSampleSet(cv::Mat &Li, cv::Mat &Lengths, cv::Mat &Mi, std::vector<int> &MSS, cv::Mat &vp);
 
     /** This function returns the Consensus Set for a given vanishing point and set of line segments*/
-    float GetConsensusSet(int vpNum, cv::Mat &Li, cv::Mat &Lengths, cv::Mat &Mi, cv::Mat &vEst, std::vector<float> &E, int *CS_counter);
+    float GetConsensusSet(cv::Mat &Li, cv::Mat &Lengths, cv::Mat &Mi, cv::Mat &vEst, std::vector<float> &E, int *CS_counter);
 
     /** This is an auxiliar function that formats data into appropriate containers*/
     void fillDataContainers(std::vector<std::vector<cv::Point> > &lineSegments);
@@ -91,10 +90,10 @@ private:
 
     // Error functions
     /** This function computes the residuals of the line segments given a vanishing point using the Least-squares method*/
-    float errorLS(int vpNum, cv::Mat &Li, cv::Mat &vp, std::vector<float> &E, int *CS_counter);
+    float errorLS(cv::Mat &Li, cv::Mat &vp, std::vector<float> &E, int *CS_counter);
 
     /** This function computes the residuals of the line segments given a vanishing point using the Nieto's method*/
-    float errorNIETO(int vpNum, cv::Mat &Li, cv::Mat &lengthsLS, cv::Mat &Mi, cv::Mat &vp, std::vector<float> &E, int *CS_counter);
+    float errorNIETO(cv::Mat &Li, cv::Mat &lengthsLS, cv::Mat &Mi, cv::Mat &vp, std::vector<float> &E, int *CS_counter);
 
 };
 
