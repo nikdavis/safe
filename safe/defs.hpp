@@ -23,6 +23,18 @@ typedef unsigned char uchar;
 #define TAU_DELTA               10
 #define LANE_FILTER_ROW_OFFSET  0
 
+// Kalman filter parameters
+#define DELAY_MS                62.5
+#define kfdt                    ( DELAY_MS / 1000.0 )
+#define SAMPLE_FREQ             16.0
+#ifndef kfdt
+#define kfdt                    ( 1.0 / SAMPLE_FREQ )
+#endif
+
+#define MEAS_NOISE              0.005
+#define PROCESS_NOISE           0.5
+
+// Helper macros
 #define draw_cross( img, center, color, d ) do {            \
     cv::line( img, cv::Point( center.x - d, center.y - d ), \
                cv::Point( center.x + d, center.y + d ),     \

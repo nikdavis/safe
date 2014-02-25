@@ -7,8 +7,10 @@
 #include "MSAC.hpp"
 #include "opencv2/opencv.hpp"
 #include <string>
+#include <cmath>
 
 inline void lane_marker_filter( const cv::Mat &src, cv::Mat &dst );
+void init_vp_kalman( cv::KalmanFilter &KF );
 inline void show_hough( cv::Mat &dst, const std::vector<cv::Vec4i> lines );
 inline bool calc_intersect( const cv::Vec4i l1, const cv::Vec4i l2,
                                                 cv::Point &intersect );
@@ -20,11 +22,14 @@ int main( int argc, char* argv[] ) {
     timer ctimer( "Canny edge detection" );
     timer htimer( "Hough transform     " );
     timer rtimer( "RANSAC              " );
+    timer ktimer( "Kalman filter VP    " );
     timer ptimer( "Process frame       " );
     frame_source* fsrc = NULL;
     cv::Mat frame, lmf_frame, hough_frame;
     MSAC msac;
     cv::Size image_size;
+    cv::KalmanFilter vpkf( 4, 2, 0 );// 4 dynamic, 2 measurement, and no control
+    cv::Mat_<float> vp = cv::Mat::zeros( 2, 1, CV_32FC1 );
     int key = -1;
 
     DMESG( "Parsing arguments" );
@@ -77,6 +82,9 @@ int main( int argc, char* argv[] ) {
     image_size.height = fsrc->frame_height();
     msac.init( MODE_NIETO, image_size );
 
+    srand( 0 );   // For repeatable testing, always seed RNG with zero
+    init_vp_kalman( vpkf );
+
     // Request and process frames until source indicates EOF
     while ( fsrc->get_frame( frame ) == 0 ) {
         ptimer.start();
@@ -116,7 +124,7 @@ int main( int argc, char* argv[] ) {
 
         //** RANSAC hough line intersections for vanishing point
         rtimer.start();
-        cv::Mat vp;
+        cv::Mat _vp;
         std::vector<cv::Point> aux;
         std::vector<std::vector<cv::Point> > lineSegments;
         std::vector<int> numInliers;
@@ -130,17 +138,32 @@ int main( int argc, char* argv[] ) {
             pt2.x = hlines[i][2];
             pt2.y = hlines[i][3];
 
-            // Store into vector of pairs of Points for msac
+            // Store into vector of pairs of Points for MSAC
             aux.clear();
             aux.push_back( pt1 );
             aux.push_back( pt2 );
             lineSegments.push_back( aux );
         }
-        vp_detected = msac.VPEstimation( lineSegments, lineSegmentsClusters, numInliers, vp );
+        vp_detected = msac.VPEstimation( lineSegments, lineSegmentsClusters, numInliers, _vp );
         rtimer.stop();
-        if ( vp_detected ) msac.drawCS( hough_frame, lineSegmentsClusters, vp );
+        if ( vp_detected ) msac.drawCS( hough_frame, lineSegmentsClusters, _vp );
 
         //** Kalman filter RANSAC result
+        ktimer.start();
+        vpkf.predict();
+        if( vp_detected ) {
+            // Convert _vp from RANSAC to something Kalman filter likes, 2x1 Mat
+            cv::Mat_<float> pvp(2,1);
+            pvp(0) = _vp.at<float>(0,0);
+            pvp(1) = _vp.at<float>(1,0);
+            // Dont update unless VP detected AND it was within frame dimensions
+            if ( ( pvp(0) > 0 ) && ( pvp(0) < fsrc->frame_width() ) &&
+                 ( pvp(1) > 0 ) && ( pvp(0) < fsrc->frame_height() ) )
+                        vp = vpkf.correct( pvp );
+        }
+        ktimer.stop();
+        draw_cross( hough_frame, cv::Point( vp(0,0), vp(1,0) ), cv::Scalar( 0, 255, 0 ), 4 );
+
         //** homography on frame using filtered intersection -> i_frame
         //** Sobel gradient filter on i_frame -> mask_frame
         //** dilation of mask_frame -> mask_frame
@@ -167,6 +190,7 @@ int main( int argc, char* argv[] ) {
         ctimer.printu();
         htimer.printu();
         rtimer.printu();
+        ktimer.printu();
         ptimer.printm();
 
         // Check for key presses and allow highgui to process events
@@ -183,6 +207,7 @@ int main( int argc, char* argv[] ) {
     ctimer.aprintu();
     htimer.aprintu();
     rtimer.aprintu();
+    ktimer.aprintu();
     ptimer.aprintm();
 
     // Pause if no key was pressed during processing loop
@@ -225,14 +250,37 @@ inline void lane_marker_filter( const cv::Mat &src, cv::Mat &dst ) {
     }
 }
 
+void init_vp_kalman( cv::KalmanFilter &KF )
+{
+    KF.statePre.at<float>(0) = 0;
+    KF.statePre.at<float>(1) = 0;
+    KF.statePre.at<float>(2) = 0;
+    KF.statePre.at<float>(3) = 0;
+    KF.transitionMatrix = *(cv::Mat_<float>(4, 4) <<
+                    1,      0,      kfdt,   0,
+                    0,      1,      0,      kfdt,
+                    0,      0,      1,      0,
+                    0,      0,      0,      1);
+
+    cv::setIdentity( KF.measurementMatrix );
+    //setIdentity(KF.processNoiseCov, Scalar::all(1e-4));
+    KF.processNoiseCov = *(cv::Mat_<float>(4, 4) <<
+        pow((float)kfdt, 4)/4.0,    0,  pow((float)kfdt, 3)/3.0,    0,
+        0,  pow((float)kfdt, 4)/4.0,    0,  pow((float)kfdt, 3)/3.0,
+        pow((float)kfdt, 3)/3.0,    0,                      pow((float)kfdt, 2)/2.0,    0,
+        0,  pow((float)kfdt, 3)/3.0,    0,  pow((float)kfdt, 2)/2.0);
+    KF.processNoiseCov = KF.processNoiseCov*( PROCESS_NOISE * PROCESS_NOISE );
+    cv::setIdentity( KF.measurementNoiseCov, cv::Scalar::all( MEAS_NOISE * MEAS_NOISE ) );
+    cv::setIdentity( KF.errorCovPost, cv::Scalar::all( 0.1 ) );
+}
 
 inline void show_hough( cv::Mat &dst, const std::vector<cv::Vec4i> lines ) {
     size_t line_count = lines.size();
     for ( size_t i = 0; i < line_count; ++i ) {
         const cv::Vec4i l = lines[i];
-        line( dst, cv::Point( l[0], l[1] ),
-                   cv::Point( l[2], l[3] ),
-                   cv::Scalar( 0, 0, 255 ), 1, CV_AA, 0 );
+        cv::line( dst, cv::Point( l[0], l[1] ),
+                       cv::Point( l[2], l[3] ),
+                       cv::Scalar( 0, 0, 255 ), 1, CV_AA, 0 );
     }
 }
 

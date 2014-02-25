@@ -7,7 +7,7 @@
 using namespace cv;
 using namespace std;
 
-#define DELAY_MS        30.0
+#define DELAY_MS        62.5
 #define dt              ( DELAY_MS / 1000.0 )
 #define SAMPLE_FREQ     30.0
 #ifndef dt
@@ -21,7 +21,7 @@ using namespace std;
 struct mouse_info_struct { int x,y; };
 struct mouse_info_struct mouse_info = {-1,-1}, last_mouse;
 
-vector<Point> mousev,kalmanv;
+//vector<Point> mousev,kalmanv;
 
 void on_mouse(int event, int x, int y, int flags, void* param) 
 {
@@ -34,8 +34,8 @@ int main (int argc, char * const argv[])
 {
     Mat img(700, 700, CV_8UC3);
     KalmanFilter KF(4, 2, 0);       // 4 dynamic parameters, 2 measurement parameters, and no control
-    Mat_<float> state(4, 1);        // (x, y, Vx, Vy)
-    Mat processNoise(4, 1, CV_32F);
+    //Mat_<float> state(4, 1);        // (x, y, Vx, Vy)
+    //Mat processNoise(4, 1, CV_32F);
     Mat_<float> measurement(2,1); 
     measurement.setTo(Scalar(0));
     char code = (char)-1;
@@ -76,26 +76,26 @@ int main (int argc, char * const argv[])
     cout << "Process noise Cov = " << KF.processNoiseCov << endl;
     cout << "Measurement Noise Cov = " << KF.measurementNoiseCov << endl;
 
-    mousev.clear();
-    kalmanv.clear();
+    //mousev.clear();
+    //kalmanv.clear();
     //randn(KF.statePost, Scalar::all(0), Scalar::all(0.1));
-
+    Mat estimated;
     while( true )
     {
         Mat prediction = KF.predict();
         Point predictPt(prediction.at<float>(0),prediction.at<float>(1));
 
-        measurement(0) = mouse_info.x+(((rand()/(float)RAND_MAX)-0.5)*100.0);
-        measurement(1) = mouse_info.y+(((rand()/(float)RAND_MAX)-0.5)*100.0);
+        measurement(0) = mouse_info.x;//+(((rand()/(float)RAND_MAX)-0.5)*100.0);
+        measurement(1) = mouse_info.y;//+(((rand()/(float)RAND_MAX)-0.5)*100.0);
 
         Point measPt(measurement(0),measurement(1));
-        mousev.push_back(measPt);
+        //mousev.push_back(measPt);
         // generate measurement
         //measurement += KF.measurementMatrix*state;
 
-        Mat estimated = KF.correct(measurement);
+        if( code != 'h' ) estimated = KF.correct(measurement);
         Point statePt(estimated.at<float>(0),estimated.at<float>(1));
-        kalmanv.push_back(statePt);
+        //kalmanv.push_back(statePt);
 
         // plot points
         #define drawCross( center, color, d )                           \
