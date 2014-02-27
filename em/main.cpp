@@ -18,7 +18,8 @@ int main( int argc, char** argv )
 {
 	BayesianSegmentation BayesSeg;
 
-    timer btimer( "Timer:         " );
+    timer btimer( "Calcbayes:         " );
+    timer emtimer( "EM:              " );
 	
 	if( argc != 2)
     {
@@ -43,18 +44,22 @@ int main( int argc, char** argv )
 	BayesSeg.probPLOUInit(0.25, 0.25, 0.25, 0.25);
 
 
-    btimer.start();
+
 
 	for (int i = 0; i < 10; i++)
 	{
-        btimer.start();
+		btimer.start();
 		BayesSeg.calBayesian(src1);
+		btimer.stop();
+		emtimer.start();
 		BayesSeg.EM_update(src1);
-        btimer.stop();
+        emtimer.stop();
+
         btimer.printm();
+        emtimer.printm();
 	}
-    btimer.stop();
     btimer.aprintm();
+    emtimer.aprintm();
 
 	cout << BayesSeg.omega.omegaP << endl;
 	cout << BayesSeg.omega.omegaL << endl;
