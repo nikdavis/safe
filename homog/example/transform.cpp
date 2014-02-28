@@ -1,14 +1,19 @@
 #include "fireflymv_camera.hpp"
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/highgui/highgui.hpp>
+#include <opencv2/calib3d/calib3d.hpp>
 #include <iostream>
 #include <math.h>
+#include "homography.hpp"
 
-#define CAM_HEIGHT  (480)
-#define CAM_WIDTH   (640)
-
+#define SINGLE_FRAME    0
+#define OUTPUT_SOBEL    0
+#define TUANS           1
+#define STEP_THROUGH    0
 using namespace cv;
 using namespace std;
+
+
 
 Mat frame;
 Mat frame1;
@@ -16,9 +21,9 @@ Mat frame1;
 
 int pitch_int = 90;
 int yaw_int = 90;
-int roll_int = 90;
-int dist_int;
-int f_int;
+int tz_int = 5300;
+int f_int = 50;
+
 
 double w;
 double h; 
@@ -27,142 +32,106 @@ double h1;
 double pitch; 
 double yaw;
 double roll; 
-double dist; 
+//double dist;
+double tx;
+double ty;
+double tz;
 double f;
 Point vanishing_point;
 
-void redraw() 
+void redraw(int sobel = 0)
 {
-	f = (double)(f_int+1)/10;
-    pitch = (double)(pitch_int - 90) * CV_PI/180.;
-	//pitch = -atan((double)(vanishing_point.y - frame.size().height/2)/(f*10));
-	//cout << (double)(vanishing_point.x - frame.size().height/2)/f << endl;
-	roll = (double)(roll_int  - 90) * CV_PI/180.;
-	yaw = (double)(yaw_int  - 90) * CV_PI/180.;
-    //dist = 1./(dist_int+1);
-    //dist = dist_int+1;
-    dist = dist_int-50;
-    
-
-    /*cout << "pitch = " << pitch*180/CV_PI << endl;
-	cout << "yaw = " << yaw*180/CV_PI << endl;
-	cout << "roll = " << roll*180/CV_PI << endl;
-    cout << "dist = " << dist << endl;
-    cout << "f = " << f << endl;*/
-
-    // Projection 2D -> 3D matrix (2D homogeneous coordinate to 3D homogeneous coordinate)
-    Mat A1 = (Mat_<double>(4,3) <<
-        1,              0,              -w/2,
-        0,              1,              -h/2,
-        0,              0,              1,
-        0,              0,              1);
-
-	// Rotation matrices around the Z axis
-    Mat R_roll = (Mat_<double>(4, 4) <<
-        cos(roll),     -sin(roll),    	0,              0,
-        sin(roll),     cos(roll),     	0,              0,
-        0,              0,              1,              0,
-        0,              0,              0,              1);
-	
-	// Rotation matrices around the Y axis
-    Mat R_yaw = (Mat_<double>(4, 4) <<
-        cos(yaw),       0,             	-sin(yaw),      0,
-        0,              1,     			0,    			0,
-        sin(yaw),       0,     			cos(yaw),     	0,
-        0,              0,              0,              1);
-
-    // Rotation matrices around the X axis
-    Mat R_pitch = (Mat_<double>(4, 4) <<
-        1,              0,              0,              0,
-        0,              cos(pitch),     -sin(pitch),    0,
-        0,              sin(pitch),     cos(pitch),     0,
-        0,              0,              0,              1);
-
-    // Translation matrix on the Z axis 
-    Mat T = (Mat_<double>(4, 4) <<
-        1,              0,              0,              0,
-        0,              1,              0,              0,
-        0,              0,              1,              dist,
-        0,              0,              0,              1);
-
-    // Camera Intrisecs matrix 3D -> 2D
-    Mat A2 = (Mat_<double>(3,4) <<
-        f,              0,              w/2,            0,
-        0,              f,              h/2,            0,
-        0,              0,              1,              0);
-
-	Mat v_real_world = (Mat_<double>(4,1) << 
-		0,				0,				1,				0);
-
-	// matRotationTotal = matRotationX * matRotationY * matRotationZ
-    Mat m = A2 * (T * (R_pitch * R_yaw * R_roll * A1));
-
-    /*cout << "R=" << endl << R << endl;
-    cout << "A1=" << endl << A1 << endl;
-    cout << "R*A1=" << endl << (R*A1) << endl;
-    cout << "T=" << endl << T << endl;
-    cout << "T * (R * A1)=" << endl << (T * (R * A1)) << endl;
-    cout << "A2=" << endl << A2 << endl;
-    cout << "A2 * (T * (R * A1))=" << endl << (A2 * (T * (R * A1))) << endl;*/
-    /*cout << "m=" << endl << m << endl;*/
-
-	warpPerspective( frame, frame, m, frame.size(), INTER_CUBIC | WARP_INVERSE_MAP);
-	imshow("Frame1", frame);
+	float theta = (pitch_int - 90);
+	float gamma = (yaw_int - 90);
+	Mat H;
+	generateHomogMat(H, theta, gamma);
+	planeToPlaneHomog(frame, frame1, H, 400);
+    imshow("Frame1", frame1); //show birds-eye view
 }
+
+
+/* Sobel info
+    if(sobel) {
+        Sobel(frame1, sobelx, frame1.depth(), 1, 0, 5);
+        Sobel(frame1, sobely, frame1.depth(), 0, 1, 5);
+        mask = sobelx + sobely;
+        threshold(mask, mask, 180, 255, THRESH_BINARY);
+        erode(mask, mask, Mat());
+        dilate(mask, mask, Mat(), Point(-1,-1), 5);
+        bitwise_and(frame1, ~mask, frame1);
+    }
+*/
 
 void callback(int, void* ) 
 {
-    redraw();
+    redraw(OUTPUT_SOBEL);
 }
 
 
 int main() 
 {
     FireflyMVCamera camera;
-	namedWindow( "Frame" ,CV_WINDOW_AUTOSIZE);		//create a window called "MyVideo"
-	namedWindow( "Frame1" ,CV_WINDOW_AUTOSIZE);		//create a window called "MyVideo"
-	namedWindow( "Frame2" ,CV_WINDOW_AUTOSIZE);		//create a window called "MyVideo"
-	//namedWindow( "Frame3" ,CV_WINDOW_AUTOSIZE);	//create a window called "MyVideo"
+	namedWindow( "Frame" ,CV_WINDOW_AUTOSIZE);
+	namedWindow( "Frame1" ,CV_WINDOW_AUTOSIZE);
 
-	pitch_int = 86;
 	createTrackbar("pitch", "Frame", &pitch_int, 180, &callback);
 	createTrackbar("yaw", "Frame", &yaw_int, 180, &callback);
-	createTrackbar("roll", "Frame", &roll_int, 180, &callback);
-    dist_int = 55;
-    createTrackbar("dist", "Frame", &dist_int, 100, &callback);
-	f_int = 33;
-    createTrackbar("f", "Frame", &f_int, 100, &callback);
+    //createTrackbar("tz", "Frame", &tz_int, 10000, &callback);
+    //createTrackbar("f", "Frame", &f_int, 500, &callback);
+	VideoCapture cap("../../MVI_5248_bw_480p.mp4"); // open the video file for reading
 
+    if(!cap.isOpened())  // if not success, exit program
+	{
+		cout << "Cannot open the video file" << endl;
+		while (waitKey(0) != 27);
+		return 0;
+	}
 
-	//cap.set(CV_CAP_PROP_POS_MSEC, 20000); //start the video at 300ms
-	w = CAM_WIDTH;
-	h = CAM_HEIGHT;
+	w = cap.get(CV_CAP_PROP_FRAME_WIDTH);
+	h = cap.get(CV_CAP_PROP_FRAME_HEIGHT);
+    cout << "CamWidth: " << w << endl;
+    cout << "CamHeight: " << h << endl;
 	//resize(frame, frame1, Size(), 1.5, 1.5);
 	double fps = 30;
+#if !SINGLE_FRAME
+    while(1) {
+        bool ret = cap.read(frame);
 
-	cout << "Frame per seconds : " << fps << endl;
-
-	while(1)
-	{
-		int ret = camera.grabFrame(frame);
-		
-		if (ret < 0) //if not success, break loop
-		{
-			cout << "Cannot read a frame from video file" << endl;
-			waitKey(0);
-			break;
-		}
+        if (!ret) //if not success, break loop
+        {
+            cap.set(CV_CAP_PROP_POS_AVI_RATIO , 0);
+            ret = cap.read(frame);
+                if(!ret) {
+                    cout << "Video invalid, exiting!" << endl;
+                    break;
+                } else {
+                    cout << "No more frames, restarting video cap..." << endl;
+                }
+            continue;
+        }
         if(frame.channels() >= 3)
-		    cvtColor(frame, frame, CV_RGB2GRAY);
-		imshow("Frame", frame); //show the frame in "MyVideo" window
-		redraw();
-		
+            cvtColor(frame, frame, CV_RGB2GRAY);
+        frame1 = frame.clone();
+        imshow("Frame", frame); //show the frame in "MyVideo" window
+        redraw(OUTPUT_SOBEL);
 
+#else
+
+    bool ret = cap.read(frame);
+    redraw();
+    while(1) {
+        int histSize = 256;
+        float range[] = {0, 256};
+        const float*histRange = {range};
+        Mat hist;
+        //calcHist(&frame1, 1, 0, Mat(), hist, 1, &histSize, &histRange, true, true);
+        imshow("Frame", frame);
+#endif
         if(waitKey(30) == 27) //wait for 'esc' key press for 30ms. If 'esc' key is pressed, break loop
-		{
-			cout << "esc key is pressed by user" << endl;
-			//break; 
-		}
-	}
+        {
+	        cout << "esc key is pressed by user" << endl;
+	        break;
+        }
+    }
 	return 0;
 }

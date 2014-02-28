@@ -2,9 +2,14 @@ CC = g++
 OUTPUT = main
 CFLAGS = -Wall
 INCLUDE = `pkg-config --cflags opencv`
-LIBS = `pkg-config --libs opencv`
+#IPP directory
+IPP_DIR = -L /opt/intel/composer_xe_2013_sp1.0.061/ipp/lib/intel64
+IPP_DIR += -L /opt/intel/composer_xe_2013_sp1.0.061/compiler/lib/intel64
+LIBS = ${IPP_DIR} `pkg-config --libs opencv`
 
 OBJS = main.o bayesSeg.o timer.o
+
+all: ${OUTPUT}
 
 ${OUTPUT}: ${OBJS}
 	${CC} -o ${OUTPUT} ${OBJS} ${LIBS}

@@ -5,6 +5,7 @@
 #include <iostream>
 #include <math.h>
 
+#define HAVE_IPP 1
 
 #define SINGLE_FRAME    0
 #define OUTPUT_SOBEL    0
@@ -12,6 +13,8 @@
 #define STEP_THROUGH    0
 using namespace cv;
 using namespace std;
+
+
 
 Mat frame;
 Mat frame1;
@@ -63,7 +66,7 @@ void redraw(int sobel = 0)
 {
     Mat sobelx, sobely, mask;
 	f = (double)(f_int) + 500;
-    pitch = (double)(pitch_int - 90) * CV_PI/180.;
+    pitch = (double)(pitch_int - 180) * CV_PI/180.;
 	//pitch = -atan((double)(vanishing_point.y - frame.size().height/2)/(f*10));
 	//cout << (double)(vanishing_point.x - frame.size().height/2)/f << endl;
 	roll = (double)(roll_int  - 90) * CV_PI/180.;
@@ -82,60 +85,63 @@ void redraw(int sobel = 0)
     cout << "dist = " << dist << endl;
     cout << "f = " << f << endl;*/
 #if TUANS
-    // Projection 2D -> 3D matrix (2D homogeneous coordinate to 3D homogeneous coordinate)
+    // Projection 2D -> 3D matrix
     Mat A1 = (Mat_<double>(4,3) <<
-        1,              0,              -w/2,
-        0,              1,              -h/2,
-        0,              0,              1,
-        0,              0,              1);
+        1, 0, -w/2,
+        0, 1, -h/2,
+        0, 0,    0,
+        0, 0,    1);
 
-	// Rotation matrices around the Z axis
-    Mat R_roll = (Mat_<double>(4, 4) <<
-        cos(roll),     -sin(roll),    	0,              0,
-        sin(roll),     cos(roll),     	0,              0,
-        0,              0,              1,              0,
-        0,              0,              0,              1);
-	
-	// Rotation matrices around the Y axis
-    Mat R_yaw = (Mat_<double>(4, 4) <<
-        cos(yaw),       0,             	-sin(yaw),      0,
-        0,              1,     			0,    			0,
-        sin(yaw),       0,     			cos(yaw),     	0,
-        0,              0,              0,              1);
+    // Rotation matrices around the X,Y,Z axis
+    Mat RX = (Mat_<double>(4, 4) <<
+        1,          0,           0, 0,
+        0, cos(pitch), -sin(pitch), 0,
+        0, sin(pitch),  cos(pitch), 0,
+        0,          0,           0, 1);
 
-    // Rotation matrices around the X axis
-    Mat R_pitch = (Mat_<double>(4, 4) <<
-        1,              0,              0,              0,
-        0,              cos(pitch),     -sin(pitch),    0,
-        0,              sin(pitch),     cos(pitch),     0,
-        0,              0,              0,              1);
+    Mat RY = (Mat_<double>(4, 4) <<
+        cos(yaw), 0, -sin(yaw), 0,
+        0, 1,          0, 0,
+        sin(yaw), 0,  cos(yaw), 0,
+        0, 0,          0, 1);
 
-    // Translation matrix on the Z axis 
+    Mat RZ = (Mat_<double>(4, 4) <<
+        cos(roll), -sin(roll), 0, 0,
+        sin(roll),  cos(roll), 0, 0,
+        0,          0,           1, 0,
+        0,          0,           0, 1);
+
+    // Composed rotation matrix with (RX,RY,RZ)
+    Mat R = RX * RY * RZ;
+
+    // Translation matrix on the Z axis change dist will change the height
     Mat T = (Mat_<double>(4, 4) <<
-        1,              0,              0,              tx,
-        0,              1,              0,              ty,
-        0,              0,              1,              tz,
-        0,              0,              0,              1);
+        1, 0, 0, 0,
+        0, 1, 0, 0,
+        0, 0, 1, tz,
+        0, 0, 0, 1);
 
     // Camera Intrisecs matrix 3D -> 2D
     Mat A2 = (Mat_<double>(3,4) <<
-        f,              0,              w/2,            0,
-        0,              f,              h/2,            0,
-        0,              0,              1,              0);
-
-	Mat v_real_world = (Mat_<double>(4,1) << 
-		0,				0,				1,				0);
+        f, 0, w/2, 0,
+        0, f, h/2, 0,
+        0, 0,   1, 0);
 
 	// matRotationTotal = matRotationX * matRotationY * matRotationZ
-    Mat P(3, 4, R_pitch.type());
+/* Mult K after downsize 
+    Mat P(4, 4, R_pitch.type());
+    Mat mlarge(4, 3, R_pitch.type());
     Mat m(3, 3, R_pitch.type());
-    P = A2 * (T * R_pitch * R_yaw * R_roll);
-    P.col(0).copyTo(m.col(0));
-    P.col(2).copyTo(m.col(1));
-    P.col(3).copyTo(m.col(2));
+    P = (T * R_pitch * R_yaw * R_roll);
+    P.col(0).copyTo(mlarge.col(0));
+    P.col(2).copyTo(mlarge.col(1));
+    P.col(3).copyTo(mlarge.col(2));
+    m = mlarge( Range(0,3), Range(0,3) );
+    m = A2 * m;
     m = m.inv();
-    //Mat m = A2 * (T *(R_pitch * R_yaw * R_roll * A1));
-    //Mat m = A2 * (T *(R_pitch * R_yaw * R_roll * A1));
+*/
+
+    Mat m = A2 * (T * (R * A1));
 #else
 
 	Mat Tvec = (Mat_<double>(3,1) << 
@@ -194,6 +200,7 @@ void redraw(int sobel = 0)
     /*cout << "m=" << endl << m << endl;*/
 
 	//warpPerspective( frame, frame1, m, Size(854, 480), INTER_CUBIC | WARP_INVERSE_MAP);
+    m = m.inv();
 	warpPerspective( frame, frame1, m, frame.size());
     if(sobel) {
         Sobel(frame1, sobelx, frame1.depth(), 1, 0, 5);
@@ -221,7 +228,7 @@ int main()
 	namedWindow( "Frame1" ,CV_WINDOW_AUTOSIZE);		//create a window called "MyVideo"
 	//namedWindow( "Frame3" ,CV_WINDOW_AUTOSIZE);	//create a window called "MyVideo"
 
-	createTrackbar("pitch", "Frame", &pitch_int, 180, &callback);
+	createTrackbar("pitch", "Frame", &pitch_int, 360, &callback);
 	createTrackbar("yaw", "Frame", &yaw_int, 180, &callback);
 	createTrackbar("roll", "Frame", &roll_int, 180, &callback);
     createTrackbar("tx", "Frame", &tx_int, 1000, &callback);
@@ -244,46 +251,44 @@ int main()
 	//resize(frame, frame1, Size(), 1.5, 1.5);
 	double fps = 30;
 #if !SINGLE_FRAME
-while(1) {
-	bool ret = cap.read(frame);
-	
-	if (!ret) //if not success, break loop
-	{
-		cout << "Cannot read a frame from video file" << endl;
-		waitKey(0);
-	}
-    if(frame.channels() >= 3)
-	cvtColor(frame, frame, CV_RGB2GRAY);
-    frame1 = frame.clone();
-	imshow("Frame", frame); //show the frame in "MyVideo" window
-	redraw(OUTPUT_SOBEL);
-#if STEP_THROUGH
     while(1) {
-        int c = waitKey(1000);
-        cout << "char pressed: " << c << endl;
-        if(c == 32) {
-            cout << "next frame" << endl;
-            break;        // Use space bar to walk through frames
+        bool ret = cap.read(frame);
+
+        if (!ret) //if not success, break loop
+        {
+            cap.set(CV_CAP_PROP_POS_AVI_RATIO , 0);
+            ret = cap.read(frame);
+                if(!ret) {
+                    cout << "Video invalid, exiting!" << endl;
+                    break;
+                } else {
+                    cout << "No more frames, restarting video cap..." << endl;
+                }
+            continue; 
         }
-    }
-#endif
+        if(frame.channels() >= 3)
+            cvtColor(frame, frame, CV_RGB2GRAY);
+        frame1 = frame.clone();
+        imshow("Frame", frame); //show the frame in "MyVideo" window
+        redraw(OUTPUT_SOBEL);
+
 #else
 
-bool ret = cap.read(frame);
-redraw();
-while(1) {
-    int histSize = 256;
-    float range[] = {0, 256};
-    const float*histRange = {range};
-    Mat hist;
-    //calcHist(&frame1, 1, 0, Mat(), hist, 1, &histSize, &histRange, true, true);
-    imshow("Frame", frame);
+    bool ret = cap.read(frame);
+    redraw();
+    while(1) {
+        int histSize = 256;
+        float range[] = {0, 256};
+        const float*histRange = {range};
+        Mat hist;
+        //calcHist(&frame1, 1, 0, Mat(), hist, 1, &histSize, &histRange, true, true);
+        imshow("Frame", frame);
 #endif
-    if(waitKey(30) == 27) //wait for 'esc' key press for 30ms. If 'esc' key is pressed, break loop
-	{
-		cout << "esc key is pressed by user" << endl;
-		break; 
-	}
-}
+        if(waitKey(30) == 27) //wait for 'esc' key press for 30ms. If 'esc' key is pressed, break loop
+        {
+	        cout << "esc key is pressed by user" << endl;
+	        break; 
+        }
+    }
 	return 0;
 }
