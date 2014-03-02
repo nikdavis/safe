@@ -5,6 +5,7 @@
 #include "cvwin.hpp"
 #include "timer.hpp"
 #include "MSAC.hpp"
+#include "homography.hpp"
 #include "opencv2/opencv.hpp"
 #include <string>
 #include <cmath>
@@ -23,12 +24,14 @@ int main( int argc, char* argv[] ) {
     timer htimer( "Hough transform     " );
     timer rtimer( "RANSAC              " );
     timer ktimer( "Kalman filter VP    " );
+    timer hmtimer( "Homography          " );
     timer ptimer( "Process frame       " );
     frame_source* fsrc = NULL;
-    cv::Mat frame, lmf_frame, hough_frame;
+    cv::Mat frame, lmf_frame, hough_frame, bird_frame;
     MSAC msac;
     cv::Size image_size;
     cv::KalmanFilter vpkf( 4, 2, 0 );// 4 dynamic, 2 measurement, and no control
+
     cv::Mat_<float> vp = cv::Mat::zeros( 2, 1, CV_32FC1 );
     int key = -1;
 
@@ -39,7 +42,7 @@ int main( int argc, char* argv[] ) {
         return -1;
     }
     if ( argv[1][0] != '-' ) {
-        std::cerr << "Must specify source type -i/-f/-c" << std::endl;
+        std::cerr << "Must specify source type -i/-v/-c" << std::endl;
         return -1;
     }
     switch( argv[1][1] ) {
@@ -150,18 +153,38 @@ int main( int argc, char* argv[] ) {
 
         //** Kalman filter RANSAC result
         ktimer.start();
+
+        cv::Mat_<float> pvp(2,1);
         vpkf.predict();
         if( vp_detected ) {
             // Convert _vp from RANSAC to something Kalman filter likes, 2x1 Mat
-            cv::Mat_<float> pvp(2,1);
             pvp(0) = _vp.at<float>(0,0);
             pvp(1) = _vp.at<float>(1,0);
             // Dont update unless VP detected AND it was within frame dimensions
             if ( ( pvp(0) > 0 ) && ( pvp(0) < fsrc->frame_width() ) &&
-                 ( pvp(1) > 0 ) && ( pvp(0) < fsrc->frame_height() ) )
+                 ( pvp(1) > 0 ) && ( pvp(1) < fsrc->frame_height() ) ) {
                         vp = vpkf.correct( pvp );
+#if PRINT_VP
+                        cout << pvp(0) << "," << pvp(1) << endl;
+#endif
+            } else {
+#if PRINT_VP
+                        cout << -1 << "," << -1 << endl;
+#endif
+            }
         }
         ktimer.stop();
+        /* Variables for homography */
+        float theta, gamma;
+        cv::Mat H;
+        hmtimer.start();
+        calcAnglesFromVP(pvp, theta, gamma);
+        generateHomogMat(H, -theta, -gamma);
+        planeToPlaneHomog(frame, bird_frame, H, 400);
+        hmtimer.stop();
+#if PRINT_ANGLES
+        cout << theta << "," << gamma << endl;
+#endif
         draw_cross( hough_frame, cv::Point( vp(0,0), vp(1,0) ), cv::Scalar( 0, 255, 0 ), 4 );
 
         //** homography on frame using filtered intersection -> i_frame
@@ -182,17 +205,19 @@ int main( int argc, char* argv[] ) {
         ptimer.stop();
 
         // Update frame displays
-        win_frame.display_frame( frame );
+        win_frame.display_frame( bird_frame );
         win_hough.display_frame( hough_frame );
 
+#if PRINT_TIMES
         // Print timer results
         ltimer.printu();
         ctimer.printu();
         htimer.printu();
         rtimer.printu();
         ktimer.printu();
+        hmtimer.printu();
         ptimer.printm();
-
+#endif
         // Check for key presses and allow highgui to process events
         if ( SINGLE_STEP ) {
             do { key = cv::waitKey( 1 ); } while( key < 0 );
@@ -201,15 +226,16 @@ int main( int argc, char* argv[] ) {
         else if( ( key = cv::waitKey( 1 ) ) >= 0 ) break;
     }
     DMESG( "Done processing frames" );
-
+#if PRINT_TIMES
     // Print average timer results
     ltimer.aprintu();
     ctimer.aprintu();
     htimer.aprintu();
     rtimer.aprintu();
     ktimer.aprintu();
+    hmtimer.aprintu();
     ptimer.aprintm();
-
+#endif
     // Pause if no key was pressed during processing loop
     if ( !SINGLE_STEP ) while( key < 0 ) key = cv::waitKey( 1 );
 
@@ -257,21 +283,23 @@ void init_vp_kalman( cv::KalmanFilter &KF )
     KF.statePre.at<float>(2) = 0;
     KF.statePre.at<float>(3) = 0;
     KF.transitionMatrix = *(cv::Mat_<float>(4, 4) <<
-                    1,      0,      kfdt,   0,
-                    0,      1,      0,      kfdt,
+                    1,      0,      1/kfdt,		0,
+                    0,      1,      0,      1/kfdt,
                     0,      0,      1,      0,
                     0,      0,      0,      1);
 
     cv::setIdentity( KF.measurementMatrix );
-    //setIdentity(KF.processNoiseCov, Scalar::all(1e-4));
+    //cv::setIdentity(KF.processNoiseCov, cv::Scalar::all(1e-4));
+
     KF.processNoiseCov = *(cv::Mat_<float>(4, 4) <<
-        pow((float)kfdt, 4)/4.0,    0,  pow((float)kfdt, 3)/3.0,    0,
-        0,  pow((float)kfdt, 4)/4.0,    0,  pow((float)kfdt, 3)/3.0,
-        pow((float)kfdt, 3)/3.0,    0,                      pow((float)kfdt, 2)/2.0,    0,
-        0,  pow((float)kfdt, 3)/3.0,    0,  pow((float)kfdt, 2)/2.0);
+        pow((float)kfdt, 4)/4.0,    0,  							pow((float)kfdt, 3)/3.0,    0,
+        0,  						pow((float)kfdt, 4)/4.0,    	0,  						pow((float)kfdt, 3)/3.0,
+        pow((float)kfdt, 3)/3.0,    0,                      		pow((float)kfdt, 2)/2.0,    0,
+        0,  						pow((float)kfdt, 3)/3.0,   		0,  						pow((float)kfdt, 2)/2.0);
     KF.processNoiseCov = KF.processNoiseCov*( PROCESS_NOISE * PROCESS_NOISE );
+
     cv::setIdentity( KF.measurementNoiseCov, cv::Scalar::all( MEAS_NOISE * MEAS_NOISE ) );
-    cv::setIdentity( KF.errorCovPost, cv::Scalar::all( 0.1 ) );
+    cv::setIdentity( KF.errorCovPost, cv::Scalar::all( 0.00001 ) );
 }
 
 inline void show_hough( cv::Mat &dst, const std::vector<cv::Vec4i> lines ) {

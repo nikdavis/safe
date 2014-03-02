@@ -2,10 +2,13 @@ CC = g++
 OUTPUT = safe
 CFLAGS = -Wall
 OCVFLAGS = -I/usr/include/flycapture `pkg-config --cflags opencv`
-OCVLIBS = -lflycapture-c `pkg-config --libs opencv`
+#IPP directory
+OCVLIBS = -L /opt/intel/composer_xe_2013_sp1.0.061/ipp/lib/intel64
+OCVLIBS += -L /opt/intel/composer_xe_2013_sp1.0.061/compiler/lib/intel64
+OCVLIBS += -lflycapture-c `pkg-config --libs opencv`
 
 OBJS  = lmmin.o errorNIETO.o MSAC.o fireflymv_camera.o fsource.o cvwin.o
-OBJS += timer.o main.o
+OBJS += timer.o main.o homography.o
 
 default : CFLAGS += -O3
 default : $(OUTPUT)
@@ -13,11 +16,16 @@ default : $(OUTPUT)
 debug : CFLAGS += -g -DDEBUG
 debug : $(OUTPUT)
 
+all: ${OUTPUT}
+
 $(OUTPUT) : $(OBJS)
 	$(CC) -o $(OUTPUT) $(OBJS) $(OCVLIBS)
 
 main.o : main.cpp defs.hpp fsource.hpp timer.hpp cvwin.hpp MSAC.hpp
 	$(CC) $(OCVFLAGS) $(CFLAGS) -c main.cpp
+
+homography.o: homography.cpp homography.hpp
+	$(CC) $(OCVFLAGS) $(CFLAGS) -c homography.cpp
 
 timer.o : timer.cpp timer.hpp
 	$(CC) $(OCVFLAGS) $(CFLAGS) -c timer.cpp

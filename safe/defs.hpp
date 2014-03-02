@@ -12,6 +12,10 @@ typedef unsigned char uchar;
 
 #define VERBOSE_MSAC            false
 
+#define PRINT_TIMES				0
+#define PRINT_VP				0
+#define PRINT_ANGLES			1
+
 #define CAM_WIDTH               640
 #define CAM_HEIGHT              480
 
