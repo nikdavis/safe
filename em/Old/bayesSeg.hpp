@@ -7,6 +7,8 @@
 #include <opencv2/imgproc/imgproc.hpp>
 #include <stdio.h>
 #include <stdlib.h>
+#include <cstdlib>
+#include <pthread.h>
 
 #ifndef USE_THREAD
 #define USE_THREAD 1
@@ -19,16 +21,6 @@ using namespace std;
 class BayesianSegmentation
 {
 public:
-	static Mat GRAY_RANGE;
-	
-	struct InterVar
-	{
-		Mat interP;
-		Mat interL;
-		Mat interO;
-		Mat interU;
-	} interVarPLOU;
-
 	struct ProbX_PLOU
 	{
 		Mat probX_P;
@@ -54,7 +46,7 @@ public:
 	} probPLOU;
 
 	Mat ProbX;
-	
+
 	struct  Sigma
 	{
 		double sigmaP;
@@ -78,48 +70,37 @@ public:
 		double omegaU;
 	} omega;
 
-	Mat hist;
-
 	struct PassArg
 	{
 		Mat src;
-		Mat probX_PLOU;
-		Mat probX;
-		Mat probPLOU_X;
-		Mat hist;
-		Mat interVar;
-		double probPLOU;
 		double miu;
 		double sigma;
 		double omega;
+		Mat probX_PLOU;
+		Mat probX;
+		double probPLOU;
+		Mat probPLOU_X;
 		int N;
 	};
 
-	int N;
+	//BayesianSegmentation();
+	double singleMiu, singleSigma;
 
-	void calcHistogram(Mat* img);
+	static void* calProbThread(void* arg);
 
-	static void* calcSingleProb(void* arg);
+	static void* calProbPLOU_X(void* arg);
 
-	void calcProbThread(Mat img);
+	static void* EM_update_class(void* arg);
 
-	void calcProb(Mat img);
+	Mat calProb(Mat src, double sigma, double miu);
 
-	static void* calSingleProbPLOU_X(void* arg);
+	void calBayesian(Mat input);
 
-	void calProbPLOU_XThread(void);
+	void calBayesianThread(Mat input);
 
-	void calcBayesian(Mat img);
+	static double calSigma(Mat input, double miu, double omega, int N);
 
-	void calcSigma(void);
-
-	static void* EM_updateSingleClass(void* arg);
-
-	void EM_updateThread(Mat img);
-
-	void EM_update(Mat img);
-
-	void Prior(void);
+	void EM_update(Mat input);
 
 	void sigmaInit(double sigmaP, double sigmaL, double sigmaO, double sigmaU);
 
@@ -127,7 +108,7 @@ public:
 
 	void probPLOUInit(double probP, double probL, double probO, double probU);
 
-	void ObjectSeg(Mat img, double thresValue);
+	void priorProb(void);
 };
 
 #endif /*__BAYES_SEG_HPP__*/

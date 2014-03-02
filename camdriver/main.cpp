@@ -31,9 +31,9 @@ int main(int argc, char** argv)
         /* Grab frame */
         camera.grabFrame(frame);
         /* Reduce noise with a kernel 3x3 */
-        GaussianBlur( frame, frame, Size(3, 3), 1.0 );
+        //GaussianBlur( frame, frame, Size(3, 3), 1.0 );
         /* Canny detector */
-        Canny( frame, frame, 30, 150, 3);
+        //Canny( frame, frame, 30, 150, 3);
 
 
         //show the current frame and the fg masks

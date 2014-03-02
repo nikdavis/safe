@@ -1,6 +1,6 @@
 CC = g++
 OUTPUT = main
-CFLAGS = -Wall -std=c++11
+CFLAGS = -Wall
 INCLUDE = `pkg-config --cflags opencv`
 #IPP directory
 IPP_DIR = -L /opt/intel/composer_xe_2013_sp1.0.061/ipp/lib/intel64
