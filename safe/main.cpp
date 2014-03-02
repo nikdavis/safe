@@ -155,7 +155,7 @@ int main( int argc, char* argv[] ) {
         ktimer.start();
 
         cv::Mat_<float> pvp(2,1);
-        vpkf.predict();
+ 	vp = vpkf.predict();
         if( vp_detected ) {
             // Convert _vp from RANSAC to something Kalman filter likes, 2x1 Mat
             pvp(0) = _vp.at<float>(0,0);
