@@ -10,6 +10,8 @@
 #include <string>
 #include <cmath>
 
+
+
 inline void lane_marker_filter( const cv::Mat &src, cv::Mat &dst );
 void init_vp_kalman( cv::KalmanFilter &KF );
 inline void show_hough( cv::Mat &dst, const std::vector<cv::Vec4i> lines );
@@ -17,8 +19,8 @@ inline bool calc_intersect( const cv::Vec4i l1, const cv::Vec4i l2,
                                                 cv::Point &intersect );
 
 int main( int argc, char* argv[] ) {
-    cvwin win_frame( "frame" );
-    cvwin win_hough( "hough" );
+    cvwin win_a( "i_frame" );
+    cvwin win_b( "hough_frame" );
     timer ltimer( "Lane filter         " );
     timer ctimer( "Canny edge detection" );
     timer htimer( "Hough transform     " );
@@ -27,7 +29,7 @@ int main( int argc, char* argv[] ) {
     timer hmtimer( "Homography          " );
     timer ptimer( "Process frame       " );
     frame_source* fsrc = NULL;
-    cv::Mat frame, lmf_frame, hough_frame, bird_frame;
+    cv::Mat frame, lmf_frame, hough_frame, i_frame, mask_frame;
     MSAC msac;
     cv::Size image_size;
     cv::KalmanFilter vpkf( 4, 2, 0 );// 4 dynamic, 2 measurement, and no control
@@ -95,6 +97,7 @@ int main( int argc, char* argv[] ) {
         //** Filter frame for gradient steps up/down horizontally -> lmf_frame
         ltimer.start();
         lane_marker_filter( frame, lmf_frame );
+        cv::normalize( lmf_frame, lmf_frame, 0, 255, cv::NORM_MINMAX, CV_8UC1 );
         ltimer.stop();
 
         //** Perform Canny edge detection on lmf_frame -> lmf_frame
@@ -127,7 +130,7 @@ int main( int argc, char* argv[] ) {
 
         //** RANSAC hough line intersections for vanishing point
         rtimer.start();
-        cv::Mat _vp;
+        cv::Mat _vp;    // Temporary holder
         std::vector<cv::Point> aux;
         std::vector<std::vector<cv::Point> > lineSegments;
         std::vector<int> numInliers;
@@ -153,7 +156,6 @@ int main( int argc, char* argv[] ) {
 
         //** Kalman filter RANSAC result
         ktimer.start();
-
         cv::Mat_<float> pvp(2,1);
         vpkf.predict();
         if( vp_detected ) {
@@ -164,30 +166,26 @@ int main( int argc, char* argv[] ) {
             if ( ( pvp(0) > 0 ) && ( pvp(0) < fsrc->frame_width() ) &&
                  ( pvp(1) > 0 ) && ( pvp(1) < fsrc->frame_height() ) ) {
                         vp = vpkf.correct( pvp );
-#if PRINT_VP
-                        cout << pvp(0) << "," << pvp(1) << endl;
-#endif
+                        if ( PRINT_VP ) cout << "VP: " << pvp(0) << ","
+                                             << pvp(1) << endl;
             } else {
-#if PRINT_VP
-                        cout << -1 << "," << -1 << endl;
-#endif
+                        if ( PRINT_VP ) cout << "VP: ND, ND" << endl;
             }
         }
         ktimer.stop();
-        /* Variables for homography */
+        draw_cross( hough_frame, cv::Point( vp(0,0), vp(1,0) ),
+                                 cv::Scalar( 0, 255, 0 ), 4 );
+
+        //** homography on frame using filtered intersection -> i_frame
         float theta, gamma;
         cv::Mat H;
         hmtimer.start();
-        calcAnglesFromVP(pvp, theta, gamma);
-        generateHomogMat(H, -theta, -gamma);
-        planeToPlaneHomog(frame, bird_frame, H, 400);
+        calcAnglesFromVP( pvp, theta, gamma );
+        generateHomogMat( H, -theta, -gamma );
+        planeToPlaneHomog( frame, i_frame, H, 400 );
         hmtimer.stop();
-#if PRINT_ANGLES
-        cout << theta << "," << gamma << endl;
-#endif
-        draw_cross( hough_frame, cv::Point( vp(0,0), vp(1,0) ), cv::Scalar( 0, 255, 0 ), 4 );
+        if ( PRINT_ANGLES ) cout << "ANGLE: " << theta << "," << gamma << endl;
 
-        //** homography on frame using filtered intersection -> i_frame
         //** Sobel gradient filter on i_frame -> mask_frame
         //** dilation of mask_frame -> mask_frame
         //** remove mask_frame from i_frame -> ip_frame
@@ -205,19 +203,20 @@ int main( int argc, char* argv[] ) {
         ptimer.stop();
 
         // Update frame displays
-        win_frame.display_frame( bird_frame );
-        win_hough.display_frame( hough_frame );
+        win_a.display_frame( i_frame );
+        win_b.display_frame( hough_frame );
 
-#if PRINT_TIMES
-        // Print timer results
-        ltimer.printu();
-        ctimer.printu();
-        htimer.printu();
-        rtimer.printu();
-        ktimer.printu();
-        hmtimer.printu();
-        ptimer.printm();
-#endif
+        if ( PRINT_TIMES ) {
+            // Print timer results
+            ltimer.printu();
+            ctimer.printu();
+            htimer.printu();
+            rtimer.printu();
+            ktimer.printu();
+            hmtimer.printu();
+            ptimer.printm();
+        }
+
         // Check for key presses and allow highgui to process events
         if ( SINGLE_STEP ) {
             do { key = cv::waitKey( 1 ); } while( key < 0 );
@@ -226,16 +225,18 @@ int main( int argc, char* argv[] ) {
         else if( ( key = cv::waitKey( 1 ) ) >= 0 ) break;
     }
     DMESG( "Done processing frames" );
-#if PRINT_TIMES
-    // Print average timer results
-    ltimer.aprintu();
-    ctimer.aprintu();
-    htimer.aprintu();
-    rtimer.aprintu();
-    ktimer.aprintu();
-    hmtimer.aprintu();
-    ptimer.aprintm();
-#endif
+
+    if ( PRINT_TIMES ) {
+        // Print average timer results
+        ltimer.aprintu();
+        ctimer.aprintu();
+        htimer.aprintu();
+        rtimer.aprintu();
+        ktimer.aprintu();
+        hmtimer.aprintu();
+        ptimer.aprintm();
+    }
+
     // Pause if no key was pressed during processing loop
     if ( !SINGLE_STEP ) while( key < 0 ) key = cv::waitKey( 1 );
 

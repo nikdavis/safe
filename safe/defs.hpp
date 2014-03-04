@@ -8,13 +8,13 @@
 typedef unsigned char uchar;
 
 // Pause after processing each frame
-#define SINGLE_STEP             false
+#define SINGLE_STEP             true
 
 #define VERBOSE_MSAC            false
 
-#define PRINT_TIMES				0
-#define PRINT_VP				0
-#define PRINT_ANGLES			1
+#define PRINT_TIMES             true
+#define PRINT_VP                true
+#define PRINT_ANGLES            false
 
 #define CAM_WIDTH               640
 #define CAM_HEIGHT              480
