@@ -16,6 +16,7 @@
 #define PRINT_TIMES             false
 #define PRINT_VP                false
 #define PRINT_ANGLES            false
+#define PRINT_STATS             false
 
 inline void lane_marker_filter( const cv::Mat &src, cv::Mat &dst );
 void init_vp_kalman( cv::KalmanFilter &KF );
@@ -200,7 +201,8 @@ int main( int argc, char* argv[] ) {
         //** Calculate homog. intensity feature frame mu and sigma
         float mu, sigma;
         mean_stddev( i_frame, mu, sigma );
-        DMESG( "MU: " << mu << " SIGMA: " << sigma );
+        if ( PRINT_STATS )
+            std::cout << "MU: " << mu << " SIGMA: " << sigma << std::endl;
 
         //** If stats significantly different from last frame, reseed EM algor.
         if ( ( std::abs( mu    - prev_mu    ) > MU_DELTA    ) || 
@@ -340,7 +342,7 @@ void mean_stddev( const cv::Mat &src, float &mean, float &stddev ) {
     int hist[256]; // Automatics of fund. types are init. to zero
     int accum = 0;
     int size = src.rows * src.cols; // Number of elements
-    uchar *pelements = src.data + size;
+    uchar *pelements = src.data;
     for ( int i = 0; i < size; ++i, ++pelements ) {
         ++hist[*pelements];
         accum += *pelements;
