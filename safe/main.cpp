@@ -10,10 +10,16 @@
 #include <string>
 #include <cmath>
 
+// Pause after processing each frame
+#define SINGLE_STEP             true
 
+#define PRINT_TIMES             false
+#define PRINT_VP                false
+#define PRINT_ANGLES            false
 
 inline void lane_marker_filter( const cv::Mat &src, cv::Mat &dst );
 void init_vp_kalman( cv::KalmanFilter &KF );
+void mean_stddev( const cv::Mat &src, float &mean, float &stddev );
 inline void show_hough( cv::Mat &dst, const std::vector<cv::Vec4i> lines );
 inline bool calc_intersect( const cv::Vec4i l1, const cv::Vec4i l2,
                                                 cv::Point &intersect );
@@ -33,6 +39,11 @@ int main( int argc, char* argv[] ) {
     MSAC msac;
     cv::Size image_size;
     cv::KalmanFilter vpkf( 4, 2, 0 );// 4 dynamic, 2 measurement, and no control
+    float prev_mu, prev_sigma;
+
+    // Force update on first frame
+    prev_mu = -1000.0;
+    prev_sigma = -1000.0;
 
     cv::Mat_<float> vp = cv::Mat::zeros( 2, 1, CV_32FC1 );
     int key = -1;
@@ -186,19 +197,39 @@ int main( int argc, char* argv[] ) {
         hmtimer.stop();
         if ( PRINT_ANGLES ) cout << "ANGLE: " << theta << "," << gamma << endl;
 
-        //** Sobel gradient filter on i_frame -> mask_frame
-        //** dilation of mask_frame -> mask_frame
-        //** remove mask_frame from i_frame -> ip_frame
-        //** ip_mu and ip_sigma of ip_frame pixels values calculated
-        //** threshold i_frame above ip_mu + ( 3 * ip_sigma ) -> il_frame
-        //** threshold i_frame below ip_mu - ( 3 * ip_sigma ) -> io_frame
-        //** lane filter applied to i_frame -> l_frame
-        //** l_mu and l_sigma of l_frame pixel values calculated
-        //** threshold l_frame above l_mu + l_sigma -> ll_frame
-        //** threshold l_frame below l_mu - l_sigma -> lpo_frame
-        //** ll_mu and ll_sigma of ll_frame pixels values calculated
-        //** lpo_mu and lpo_sigma of lpo_frame pixels values calculated
-        // EM stuff using calculated parameters ... ?
+        //** Calculate homog. intensity feature frame mu and sigma
+        float mu, sigma;
+        mean_stddev( i_frame, mu, sigma );
+        DMESG( "MU: " << mu << " SIGMA: " << sigma );
+
+        //** If stats significantly different from last frame, reseed EM algor.
+        if ( ( std::abs( mu    - prev_mu    ) > MU_DELTA    ) || 
+             ( std::abs( sigma - prev_sigma ) > SIGMA_DELTA ) ) {
+            DMESG( "Significant stat. deltas, reseeding EM algorithm" );
+            //** Sobel gradient filter on i_frame -> mask_frame
+            //** Dilation of mask_frame -> mask_frame
+            //** Remove mask_frame from i_frame -> ip_frame
+            //** Calculate ip_mu and ip_sigma of ip_frame pixels values
+            //** Threshold i_frame above ip_mu + ( 3 * ip_sigma ) -> il_frame
+            //** Threshold i_frame below ip_mu - ( 3 * ip_sigma ) -> io_frame
+            //** Apply lane filter to i_frame -> l_frame
+            //** l_mu and l_sigma of l_frame pixel values calculated
+            //** Threshold l_frame above l_mu + l_sigma -> ll_frame
+            //** Threshold l_frame below l_mu - l_sigma -> lpo_frame
+            //** Calculate ll_mu and ll_sigma of ll_frame pixels values
+            //** Calculate lpo_mu and lpo_sigma of lpo_frame pixels values
+            //** Reseed (init) EM
+        }
+        prev_mu = mu;
+        prev_sigma = sigma;
+
+        //** Update EM
+        //** Create object image
+        //** Perform opening
+        //** Perform blob detection
+        //** Generate distance value
+        //** tracking stuff...
+        //** (new car addition, old car removal, correlation, etc)
 
         ptimer.stop();
 
@@ -249,6 +280,7 @@ inline void lane_marker_filter( const cv::Mat &src, cv::Mat &dst ) {
     int tau_cnt = 0;
     int tau = ROTATE_TAU ? MIN_TAU : TAU;
 
+    //TODO: May save some time if this alloc is moved outside/done once
     dst = cv::Mat::zeros( src.rows, src.cols, CV_8UC1 );
 
     for ( int row = 0; row < src.rows; ++row ) {
@@ -301,6 +333,24 @@ void init_vp_kalman( cv::KalmanFilter &KF )
 
     cv::setIdentity( KF.measurementNoiseCov, cv::Scalar::all( MEAS_NOISE * MEAS_NOISE ) );
     cv::setIdentity( KF.errorCovPost, cv::Scalar::all( 0.00001 ) );
+}
+
+// Assumes unsigned byte (uchar) elements
+void mean_stddev( const cv::Mat &src, float &mean, float &stddev ) {
+    int hist[256]; // Automatics of fund. types are init. to zero
+    int accum = 0;
+    int size = src.rows * src.cols; // Number of elements
+    uchar *pelements = src.data + size;
+    for ( int i = 0; i < size; ++i, ++pelements ) {
+        ++hist[*pelements];
+        accum += *pelements;
+    }
+    mean = accum / ( float ) size;
+    for ( int i = 0, accum = 0; i < 256; ++i ) {
+        float delta = ( float ) i - mean;
+        accum += ( float ) hist[i] * ( delta * delta );
+    }
+    stddev = std::sqrt( accum / ( float ) size );
 }
 
 inline void show_hough( cv::Mat &dst, const std::vector<cv::Vec4i> lines ) {

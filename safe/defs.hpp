@@ -7,17 +7,14 @@
 
 typedef unsigned char uchar;
 
-// Pause after processing each frame
-#define SINGLE_STEP             true
-
 #define VERBOSE_MSAC            false
-
-#define PRINT_TIMES             true
-#define PRINT_VP                true
-#define PRINT_ANGLES            false
 
 #define CAM_WIDTH               640
 #define CAM_HEIGHT              480
+
+// Transitory state thresholds TODO: Pick based on actual data; I just guessed
+#define MU_DELTA                ( 256 / 8 )
+#define SIGMA_DELTA             ( 256 / 4 )
 
 // Lane marker filter parameters
 #define ROTATE_TAU              false
