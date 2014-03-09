@@ -6,6 +6,7 @@
 #include "timer.hpp"
 #include "MSAC.hpp"
 #include "homography.hpp"
+#include "bayesSeg.hpp"
 #include "opencv2/opencv.hpp"
 #include <string>
 #include <cmath>
@@ -35,12 +36,14 @@ int main( int argc, char* argv[] ) {
     timer ktimer( "Kalman filter VP    " );
     timer hmtimer( "Homography          " );
     timer ptimer( "Process frame       " );
+    timer etimer( "EM update           " );
     frame_source* fsrc = NULL;
-    cv::Mat frame, lmf_frame, hough_frame, i_frame, mask_frame;
+    cv::Mat frame, lmf_frame, hough_frame, i_frame, mask_frame, obj_frame;
     MSAC msac;
     cv::Size image_size;
     cv::KalmanFilter vpkf( 4, 2, 0 );// 4 dynamic, 2 measurement, and no control
     float prev_mu, prev_sigma;
+    BayesianSegmentation bayes_seg;
 
     // Force update on first frame
     prev_mu = -1000.0;
@@ -175,8 +178,8 @@ int main( int argc, char* argv[] ) {
             pvp(0) = _vp.at<float>(0,0);
             pvp(1) = _vp.at<float>(1,0);
             // Dont update unless VP detected AND it was within frame dimensions
-            if ( ( pvp(0) > 0 ) && ( pvp(0) < fsrc->frame_width() ) &&
-                 ( pvp(1) > 0 ) && ( pvp(1) < fsrc->frame_height() ) ) {
+            if ( ( pvp(0) >= 0 ) && ( pvp(0) < fsrc->frame_width() ) &&
+                 ( pvp(1) >= 0 ) && ( pvp(1) < fsrc->frame_height() ) ) {
                         vp = vpkf.correct( pvp );
                         if ( PRINT_VP ) cout << "VP: " << pvp(0) << ","
                                              << pvp(1) << endl;
@@ -192,7 +195,7 @@ int main( int argc, char* argv[] ) {
         float theta, gamma;
         cv::Mat H;
         hmtimer.start();
-        calcAnglesFromVP( pvp, theta, gamma );
+        calcAnglesFromVP( vp, theta, gamma );
         generateHomogMat( H, -theta, -gamma );
         planeToPlaneHomog( frame, i_frame, H, 400 );
         hmtimer.stop();
@@ -221,11 +224,24 @@ int main( int argc, char* argv[] ) {
             //** Calculate ll_mu and ll_sigma of ll_frame pixels values
             //** Calculate lpo_mu and lpo_sigma of lpo_frame pixels values
             //** Reseed (init) EM
+
+            // TODO: This is just placeholder init code, should do above!
+            bayes_seg.sigmaInit(10, 10, 10, 20);
+            bayes_seg.miuInit(50, 130, 10, 10);
+            bayes_seg.probPLOUInit(0.2, 0.25, 0.25, 0.3);
         }
         prev_mu = mu;
         prev_sigma = sigma;
 
         //** Update EM
+        etimer.start();
+        bayes_seg.calcHistogram( i_frame );
+        bayes_seg.calcBayesian( i_frame );
+        bayes_seg.EM_update( i_frame );
+        bayes_seg.Prior();
+        bayes_seg.ObjectSeg( i_frame, 40, obj_frame );
+        etimer.stop();
+
         //** Create object image
         //** Perform opening
         //** Perform blob detection
@@ -247,6 +263,7 @@ int main( int argc, char* argv[] ) {
             rtimer.printu();
             ktimer.printu();
             hmtimer.printu();
+            etimer.printu();
             ptimer.printm();
         }
 
@@ -267,6 +284,7 @@ int main( int argc, char* argv[] ) {
         rtimer.aprintu();
         ktimer.aprintu();
         hmtimer.aprintu();
+        etimer.aprintu();
         ptimer.aprintm();
     }
 
