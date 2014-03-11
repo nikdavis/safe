@@ -7,8 +7,6 @@
 #include <opencv2/imgproc/imgproc.hpp>
 #include <stdio.h>
 #include <stdlib.h>
-#include <pthread.h>
-
 
 #ifndef USE_THREAD
 #define USE_THREAD 1
@@ -22,6 +20,14 @@ class BayesianSegmentation
 {
 public:
 	static Mat GRAY_RANGE;
+	
+	struct InterVar
+	{
+		Mat interP;
+		Mat interL;
+		Mat interO;
+		Mat interU;
+	} interVarPLOU;
 
 	struct ProbX_PLOU
 	{
@@ -76,12 +82,12 @@ public:
 
 	struct PassArg
 	{
-		Mat oldSrc;
 		Mat src;
 		Mat probX_PLOU;
 		Mat probX;
 		Mat probPLOU_X;
 		Mat hist;
+		Mat interVar;
 		double probPLOU;
 		double miu;
 		double sigma;
@@ -90,8 +96,6 @@ public:
 	};
 
 	int N;
-
-	void writeCSV(Mat data, string fileName);
 
 	void calcHistogram(Mat* img);
 
@@ -107,13 +111,13 @@ public:
 
 	void calcBayesian(Mat img);
 
-	void calcSigma(Mat img);
+	void calcSigma(void);
 
 	static void* EM_updateSingleClass(void* arg);
 
-	void EM_updateThread(Mat oldImg, Mat img);
+	void EM_updateThread(Mat img);
 
-	void EM_update(Mat oldImg, Mat img);
+	void EM_update(Mat img);
 
 	void Prior(void);
 

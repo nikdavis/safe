@@ -6,9 +6,6 @@
 #include "bayesSeg.hpp"
 #include <iostream>
 #include <pthread.h>
-#include <string>
-#include <sstream> 
-#include <fstream>
 
 using namespace cv;
 using namespace std;
@@ -30,20 +27,6 @@ Mat BayesianSegmentation::GRAY_RANGE = (Mat_<float>(256, 1) <<	0, 1, 2, 3, 4, 5,
 																224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234, 235, 236, 237, 238, 239,
 																240, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255);
 
-void BayesianSegmentation::writeCSV(Mat data, string fileName)
-{
-	ofstream fout(fileName);
-	for (int r = 0; r < data.rows; r++)
-	{
-		for (int c = 0; c < data.cols; c++)
-		{
-			fout << data.at<float>(r, c) << ';';
-		}
-		fout << endl;
-	}
-	fout.close();
-}
-
 void BayesianSegmentation::calcHistogram(Mat* img)
 {
 	N = img->size().area();
@@ -59,23 +42,35 @@ void BayesianSegmentation::calcHistogram(Mat* img)
 
 	/// Compute the histograms:
 	calcHist(img, 1, 0, Mat(), hist, 1, &histSize, &histRange, uniform, accumulate);
-	//writeCSV(hist, "hist.csv");
 }
 
 void* BayesianSegmentation::calcSingleProb(void* arg)
 {
 	PassArg* args = (static_cast<PassArg*>(arg));
+	//if ((args->src.type() != CV_32F) && (args->src.type() != CV_64F))
+	//	args->src.convertTo(args->src, CV_32F);
 	double p;
 	//out = (1/sigma*sqrt(2*pi))*exp(-(X-miu).^2/(2*sigma^2));
 	// P_CONST: 1/sqrt(2*pi)
-	Mat subMat, powMat, divMat, expMat, finalMat, outMat;
-	subtract(GRAY_RANGE, args->miu, subMat);				// X - miu
-	pow(subMat, 2, powMat);									// (X - miu).^2
-	divide(powMat, 2 * args->sigma * args->sigma, divMat);	// (X-miu).^2/(2*sigma^2)
-	exp(-divMat, expMat);									// exp(-(X-miu).^2/(2*sigma^2));
+	Mat subMat, powMat, divMat, negDivMat, expMat, finalMat, outMat;
+
+	if (args->interVar.rows != 256)
+	{
+		subtract(GRAY_RANGE, args->miu, subMat);				// X - miu
+		pow(subMat, 2, powMat);									// (X - miu).^2
+		divide(powMat, 2 * args->sigma * args->sigma, divMat);	// (X-miu).^2/(2*sigma^2)
+	}
+	else
+	{
+		divide(args->interVar, 2 * args->sigma * args->sigma, divMat);	// (X-miu).^2/(2*sigma^2)
+	}
+	
+	subtract(0, divMat, negDivMat);							// -(X-miu).^2/(2*sigma^2)
+	exp(negDivMat, expMat);									// exp(-(X-miu).^2/(2*sigma^2));
 	p = P_CONST / args->sigma;								// (1/(sigma*sqrt(2*pi)))
 	finalMat = expMat*p;									// (1/sigma*sqrt(2*pi))*exp(-(X-miu).^2/sigma.^2);
-	args->probX_PLOU = finalMat*args->probPLOU;
+	LUT(args->src, finalMat, outMat);
+	args->probX_PLOU = outMat*args->probPLOU;
 
 	return nullptr;
 }
@@ -89,24 +84,28 @@ void BayesianSegmentation::calcProbThread(Mat img)
 	passArg1.miu = miu.miuP;
 	passArg1.sigma = sigma.sigmaP;
 	passArg1.probPLOU = probPLOU.probP;
+	passArg1.interVar = interVarPLOU.interP;
 	pthread_create(&thread1, NULL, calcSingleProb, static_cast<void*>(&passArg1));
 
 	passArg2.src = img;
 	passArg2.miu = miu.miuL;
 	passArg2.sigma = sigma.sigmaL;
 	passArg2.probPLOU = probPLOU.probL;
+	passArg2.interVar = interVarPLOU.interL;
 	pthread_create(&thread2, NULL, calcSingleProb, static_cast<void*>(&passArg2));
 
 	passArg3.src = img;
 	passArg3.miu = miu.miuO;
 	passArg3.sigma = sigma.sigmaO;
 	passArg3.probPLOU = probPLOU.probO;
+	passArg3.interVar = interVarPLOU.interO;
 	pthread_create(&thread3, NULL, calcSingleProb, static_cast<void*>(&passArg3));
 
 	passArg4.src = img;
 	passArg4.miu = miu.miuU;
 	passArg4.sigma = sigma.sigmaU;
 	passArg4.probPLOU = probPLOU.probU;
+	passArg4.interVar = interVarPLOU.interU;
 	pthread_create(&thread4, NULL, calcSingleProb, static_cast<void*>(&passArg4));
 
 	pthread_join(thread1, NULL);
@@ -123,7 +122,7 @@ void BayesianSegmentation::calcProbThread(Mat img)
 void BayesianSegmentation::calcProb(Mat img)
 {
 	double p;
-	Mat subMat, powMat, divMat, expMat, finalMat;
+	Mat subMat, powMat, divMat, negDivMat, expMat, finalMat;
 	//out = (1/sigma*sqrt(2*pi))*exp(-(X-miu).^2/(2*sigma^2));
 	// P_CONST: 1/sqrt(2*pi)
 
@@ -131,39 +130,43 @@ void BayesianSegmentation::calcProb(Mat img)
 	subtract(GRAY_RANGE, miu.miuP, subMat);			// X - miu
 	pow(subMat, 2, powMat);							// (X - miu).^2
 	divide(powMat, 2 * sigma.sigmaP*sigma.sigmaP, divMat);	// (X-miu).^2/(2*sigma^2)
-	exp(-divMat, expMat);							// exp(-(X-miu).^2/(2*sigma^2));
+	subtract(0, divMat, negDivMat);					// -(X-miu).^2/(2*sigma^2)
+	exp(negDivMat, expMat);							// exp(-(X-miu).^2/(2*sigma^2));
 	p = P_CONST / sigma.sigmaP;						// (1/(sigma*sqrt(2*pi)))
-	probX_PLOU.probX_P = expMat*p;							// (1/sigma*sqrt(2*pi))*exp(-(X-miu).^2/sigma.^2);
-	//LUT(img, finalMat, probX_PLOU.probX_P);
+	finalMat = expMat*p;							// (1/sigma*sqrt(2*pi))*exp(-(X-miu).^2/sigma.^2);
+	LUT(img, finalMat, probX_PLOU.probX_P);
 
 	// L
 	subtract(GRAY_RANGE, miu.miuL, subMat);			// X - miu
 	pow(subMat, 2, powMat);							// (X - miu).^2
 	divide(powMat, 2 * sigma.sigmaL*sigma.sigmaL, divMat);	// (X-miu).^2/(2*sigma^2)
-	exp(-divMat, expMat);							// exp(-(X-miu).^2/(2*sigma^2));
+	subtract(0, divMat, negDivMat);					// -(X-miu).^2/(2*sigma^2)
+	exp(negDivMat, expMat);							// exp(-(X-miu).^2/(2*sigma^2));
 	p = P_CONST / sigma.sigmaL;						// (1/(sigma*sqrt(2*pi)))
-	probX_PLOU.probX_L = expMat*p;							// (1/sigma*sqrt(2*pi))*exp(-(X-miu).^2/sigma.^2);
-	//LUT(img, finalMat, probX_PLOU.probX_L);
+	finalMat = expMat*p;							// (1/sigma*sqrt(2*pi))*exp(-(X-miu).^2/sigma.^2);
+	LUT(img, finalMat, probX_PLOU.probX_L);
 
 
 	// O
 	subtract(GRAY_RANGE, miu.miuO, subMat);			// X - miu
 	pow(subMat, 2, powMat);							// (X - miu).^2
 	divide(powMat, 2 * sigma.sigmaO*sigma.sigmaO, divMat);	// (X-miu).^2/(2*sigma^2)
-	exp(-divMat, expMat);							// exp(-(X-miu).^2/(2*sigma^2));
+	subtract(0, divMat, negDivMat);					// -(X-miu).^2/(2*sigma^2)
+	exp(negDivMat, expMat);							// exp(-(X-miu).^2/(2*sigma^2));
 	p = P_CONST / sigma.sigmaO;						// (1/(sigma*sqrt(2*pi)))
-	probX_PLOU.probX_O = expMat*p;							// (1/sigma*sqrt(2*pi))*exp(-(X-miu).^2/sigma.^2);
-	//LUT(img, finalMat, probX_PLOU.probX_O);
+	finalMat = expMat*p;							// (1/sigma*sqrt(2*pi))*exp(-(X-miu).^2/sigma.^2);
+	LUT(img, finalMat, probX_PLOU.probX_O);
 
 
 	// U
 	subtract(GRAY_RANGE, miu.miuU, subMat);			// X - miu
 	pow(subMat, 2, powMat);							// (X - miu).^2
 	divide(powMat, 2 * sigma.sigmaU*sigma.sigmaU, divMat);	// (X-miu).^2/(2*sigma^2)
-	exp(-divMat, expMat);							// exp(-(X-miu).^2/(2*sigma^2));
+	subtract(0, divMat, negDivMat);					// -(X-miu).^2/(2*sigma^2)
+	exp(negDivMat, expMat);							// exp(-(X-miu).^2/(2*sigma^2));
 	p = P_CONST / sigma.sigmaU;						// (1/(sigma*sqrt(2*pi)))
-	probX_PLOU.probX_U = expMat*p;							// (1/sigma*sqrt(2*pi))*exp(-(X-miu).^2/sigma.^2);
-	//LUT(img, finalMat, probX_PLOU.probX_U);
+	finalMat = expMat*p;							// (1/sigma*sqrt(2*pi))*exp(-(X-miu).^2/sigma.^2);
+	LUT(img, finalMat, probX_PLOU.probX_U);
 }
 
 void* BayesianSegmentation::calSingleProbPLOU_X(void* arg)
@@ -212,136 +215,108 @@ void BayesianSegmentation::calProbPLOU_XThread(void)
 
 void BayesianSegmentation::calcBayesian(Mat img)
 {
-	
-#if !USE_THREAD
 	// calculate the probability of X given P / L / O / U
+#if !USE_THREAD
 	calcProb(img);
+#else
+	calcProbThread(img);
+#endif
 
 	// calculate the probability of X
 	//ProbX = probX_P*probP + probX_L*probL + probX_O*probO + probX_U*probU;
-	ProbX = probX_PLOU.probX_P*probPLOU.probP + probX_PLOU.probX_L*probPLOU.probL + probX_PLOU.probX_O*probPLOU.probO + probX_PLOU.probX_U*probPLOU.probU;
+	//ProbX = probX_PLOU.probX_P*probPLOU.probP + probX_PLOU.probX_L*probPLOU.probL + probX_PLOU.probX_O*probPLOU.probO + probX_PLOU.probX_U*probPLOU.probU;
+	add(probX_PLOU.probX_P, probX_PLOU.probX_L, ProbX);
+	add(probX_PLOU.probX_O, ProbX, ProbX);
+	add(ProbX, probX_PLOU.probX_U, ProbX);
 
-	
 	// calculate the propability of P/L/O/U given X
+#if !USE_THREAD
 	divide(probX_PLOU.probX_P*probPLOU.probP, ProbX, probPLOU_X.probP_X);
 	divide(probX_PLOU.probX_L*probPLOU.probL, ProbX, probPLOU_X.probL_X);
 	divide(probX_PLOU.probX_O*probPLOU.probO, ProbX, probPLOU_X.probO_X);
 	divide(probX_PLOU.probX_U*probPLOU.probU, ProbX, probPLOU_X.probU_X);
-
-	/*writeCSV(probPLOU_X.probP_X, "probP_X.csv");
-	writeCSV(probPLOU_X.probL_X, "probL_X.csv");*/
 #else
-	// calculate the probability of X given P / L / O / U
-	calcProbThread(img);
-
-	// calculate the probability of X
-	//ProbX = probX_P*probP + probX_L*probL + probX_O*probO + probX_U*probU;
-	add(probX_PLOU.probX_P, probX_PLOU.probX_L, ProbX);
-	add(probX_PLOU.probX_O, ProbX, ProbX);
-	add(ProbX, probX_PLOU.probX_U, ProbX);
-	
-	// calculate the propability of P/L/O/U given X
 	calProbPLOU_XThread();
-
-	/*writeCSV(probPLOU_X.probP_X, "probP_X_Thread.csv");
-	writeCSV(probPLOU_X.probL_X, "probL_X_Thread.csv");*/
 #endif
 }
 
-void BayesianSegmentation::calcSigma(Mat img)
+void BayesianSegmentation::calcSigma(void)
 {
 	Mat subMat, powMat, mulMat;
 
 	// P
 	subtract(GRAY_RANGE, miu.miuP, subMat);
 	pow(subMat, 2, powMat);
-	multiply(probPLOU_X.probP_X, powMat, mulMat);
-	sigma.sigmaP = sqrt((sum(mulMat)[0]) / (N * omega.omegaP)) + 1;
+	multiply(powMat, hist, mulMat);
+	sigma.sigmaP = sqrt((sum(mulMat)[0]) / (N * omega.omegaP));
 
 	// L
 	subtract(GRAY_RANGE, miu.miuL, subMat);
 	pow(subMat, 2, powMat);
-	multiply(probPLOU_X.probL_X, powMat, mulMat);
-	sigma.sigmaL = sqrt((sum(mulMat)[0]) / (N * omega.omegaL)) + 1;
+	multiply(powMat, hist, mulMat);
+	sigma.sigmaL = sqrt((sum(mulMat)[0]) / (N * omega.omegaL));
 
 	// O
 	subtract(GRAY_RANGE, miu.miuO, subMat);
 	pow(subMat, 2, powMat);
-	multiply(probPLOU_X.probO_X, powMat, mulMat);
-	sigma.sigmaO = sqrt((sum(mulMat)[0]) / (N * omega.omegaO)) + 1;
+	multiply(powMat, hist, mulMat);
+	sigma.sigmaO = sqrt((sum(mulMat)[0]) / (N * omega.omegaO));
 
 	// P
 	subtract(GRAY_RANGE, miu.miuU, subMat);
 	pow(subMat, 2, powMat);
-	multiply(probPLOU_X.probU_X, powMat, mulMat);
-	sigma.sigmaU = sqrt((sum(mulMat)[0]) / (N * omega.omegaU)) + 1;
+	multiply(powMat, hist, mulMat);
+	sigma.sigmaU = sqrt((sum(mulMat)[0]) / (N * omega.omegaU));
 }
 
 void* BayesianSegmentation::EM_updateSingleClass(void* arg)
 {
 	PassArg* args = (static_cast<PassArg*>(arg));
-	Mat img = args->src.clone();
-	Mat subMat, powMat, mulMat;
+	Mat subMat, mulMat;
 
 	// Calculate omega
-	Mat temp, temp1, temp2;
-	multiply(args->probPLOU_X, args->hist, temp);
-	args->omega = sum(temp)[0] / args->N;
+	args->omega = sum(args->probPLOU_X)[0] / args->N;
+	Mat temp;
+	cv::multiply(args->src, args->probPLOU_X, temp);
 
 	// Calculate miu
-	LUT(args->oldSrc, args->probPLOU_X, temp);
-	if ((img.type() != CV_32F) && (img.type() != CV_64F))
-		img.convertTo(img, CV_32F);
-	multiply(img, temp, temp1);
-	args->miu = (sum(temp1)[0]) / (args->N*args->omega);
+	args->miu = (sum(temp)[0]) / (args->N*args->omega);
 
 	// Calculate sigma
-	//subtract(args->src, args->miu, subMat);
-	//pow(subMat, 2, powMat);
-	
-	subtract(GRAY_RANGE, args->miu, subMat);	
-	pow(subMat, 2, powMat);
-	LUT(args->src, powMat, temp2);
-	
-	multiply(temp, temp2, mulMat);
-	args->sigma = sqrt((sum(mulMat)[0]) / (args->N * args->omega)) + 1;
+	subtract(GRAY_RANGE, args->miu, subMat);
+	pow(subMat, 2, args->interVar);
+	multiply(args->interVar, args->hist, mulMat);
+	args->sigma = sqrt((sum(mulMat)[0]) / (args->N * args->omega));
 	return nullptr;
 }
 
-void BayesianSegmentation::EM_updateThread(Mat oldImg, Mat img)
+void BayesianSegmentation::EM_updateThread(Mat img)
 {
-	/*if ((img.type() != CV_32F) && (img.type() != CV_64F))
-		img.convertTo(img, CV_32F);*/
-
 	pthread_t thread1, thread2, thread3, thread4;
 	PassArg arg1, arg2, arg3, arg4;
 
 	arg1.N = N;
 	arg1.src = img;
-	arg1.oldSrc = oldImg;
-	arg1.hist = hist;
 	arg1.probPLOU_X = probPLOU_X.probP_X;
+	arg1.hist = hist;
 	pthread_create(&thread1, NULL, EM_updateSingleClass, static_cast<void*>(&arg1));
 
 	arg2.N = N;
 	arg2.src = img;
-	arg2.oldSrc = oldImg;
-	arg2.hist = hist;
 	arg2.probPLOU_X = probPLOU_X.probL_X;
+	arg2.hist = hist;
 	pthread_create(&thread2, NULL, EM_updateSingleClass, static_cast<void*>(&arg2));
 
 	arg3.N = N;
 	arg3.src = img;
-	arg3.oldSrc = oldImg;
-	arg3.hist = hist;
 	arg3.probPLOU_X = probPLOU_X.probO_X;
+	arg3.hist = hist;
 	pthread_create(&thread3, NULL, EM_updateSingleClass, static_cast<void*>(&arg3));
 
 	arg4.N = N;
 	arg4.src = img;
-	arg4.oldSrc = oldImg;
-	arg4.hist = hist;
 	arg4.probPLOU_X = probPLOU_X.probU_X;
+	arg4.hist = hist;
 	pthread_create(&thread4, NULL, EM_updateSingleClass, static_cast<void*>(&arg4));
 
 	pthread_join(thread1, NULL);
@@ -363,80 +338,39 @@ void BayesianSegmentation::EM_updateThread(Mat oldImg, Mat img)
 	sigma.sigmaL = arg2.sigma;
 	sigma.sigmaO = arg3.sigma;
 	sigma.sigmaU = arg4.sigma;
+
+	interVarPLOU.interP = arg1.interVar;
+	interVarPLOU.interL = arg2.interVar;
+	interVarPLOU.interO = arg3.interVar;
+	interVarPLOU.interU = arg4.interVar;
 }
 
-void BayesianSegmentation::EM_update(Mat oldImg, Mat img)
+void BayesianSegmentation::EM_update(Mat img)
 {
-	
-#if !USE_THREAD
-	Mat tmp1, tmp2, tmp3, tmp4, temp;
-
-	/*LUT(img, probPLOU_X.probP_X, temp);
-	writeCSV(temp, "probP_X1.csv");*/
-	multiply(probPLOU_X.probP_X, hist, tmp1);
-	omega.omegaP = sum(tmp1)[0] / N;
-
-	multiply(probPLOU_X.probL_X, hist, tmp2);
-	omega.omegaL = sum(tmp2)[0] / N;
-
-	multiply(probPLOU_X.probO_X, hist, tmp3);
-	omega.omegaO = sum(tmp3)[0] / N;
-
-	multiply(probPLOU_X.probU_X, hist, tmp4);
-	omega.omegaU = sum(tmp4)[0] / N;
-
-	LUT(oldImg, probPLOU_X.probP_X, tmp1);
-	LUT(oldImg, probPLOU_X.probL_X, tmp2);
-	LUT(oldImg, probPLOU_X.probO_X, tmp3);
-	LUT(oldImg, probPLOU_X.probU_X, tmp4);
-
 	if ((img.type() != CV_32F) && (img.type() != CV_64F))
 		img.convertTo(img, CV_32F);
+#if !USE_THREAD
+	omega.omegaP = sum(probPLOU_X.probP_X)[0] / N;
+	omega.omegaL = sum(probPLOU_X.probL_X)[0] / N;
+	omega.omegaO = sum(probPLOU_X.probO_X)[0] / N;
+	omega.omegaU = sum(probPLOU_X.probU_X)[0] / N;
 
 	Mat temp1, temp2, temp3, temp4;
-	
-	multiply(img, tmp1, temp1);
+	multiply(img,  probPLOU_X.probP_X, temp1);
 	miu.miuP = (sum(temp1)[0]) / (N*omega.omegaP);
 
-	
-	multiply(img, tmp2, temp2);
+	multiply(img, probPLOU_X.probL_X, temp2);
 	miu.miuL = (sum(temp2)[0]) / (N*omega.omegaL);
 
-	
-	multiply(img, tmp3, temp3);
+	multiply(img, probPLOU_X.probO_X, temp3);
 	miu.miuO = (sum(temp3)[0]) / (N*omega.omegaO);
 
-	
-	multiply(img, tmp4, temp4);
+	multiply(img, probPLOU_X.probU_X, temp4);
 	miu.miuU = (sum(temp4)[0]) / (N*omega.omegaU);
 
-	Mat subMat, powMat, mulMat;
-
-	// P
-	subtract(img, miu.miuP, subMat);
-	pow(subMat, 2, powMat);
-	multiply(tmp1, powMat, mulMat);
-	sigma.sigmaP = sqrt((sum(mulMat)[0]) / (N * omega.omegaP)) + 1;
-
-	// L
-	subtract(img, miu.miuL, subMat);
-	pow(subMat, 2, powMat);
-	multiply(tmp2, powMat, mulMat);
-	sigma.sigmaL = sqrt((sum(mulMat)[0]) / (N * omega.omegaL)) + 1;
-
-	// O
-	subtract(img, miu.miuO, subMat);
-	pow(subMat, 2, powMat);
-	multiply(tmp3, powMat, mulMat);
-	sigma.sigmaO = sqrt((sum(mulMat)[0]) / (N * omega.omegaO)) + 1;
-
-	// P
-	subtract(img, miu.miuU, subMat);
-	pow(subMat, 2, powMat);
-	multiply(tmp4, powMat, mulMat);
-	sigma.sigmaU = sqrt((sum(mulMat)[0]) / (N * omega.omegaU)) + 1;
+	calcSigma();
 #else
-	EM_updateThread(oldImg, img);
+	EM_updateThread(img);
 #endif
 
 }

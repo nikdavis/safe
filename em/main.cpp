@@ -9,24 +9,6 @@
 using namespace std;
 using namespace cv;
 
-
-void callBack(int threshValue, void *userData)
-{
-	Mat src = *(static_cast<Mat*>(userData));
-	Mat img;
-	src.copyTo(img);
-	Mat objMask;
-	threshold(img, objMask, threshValue, 255,  THRESH_BINARY_INV);
-
-	Mat kernel = getStructuringElement(MORPH_RECT, Size(5, 5));
-
-	//apply morphology filter to the image
-	morphologyEx(objMask, objMask, MORPH_OPEN, kernel);
-	imshow("My Window", objMask);
-}
-
-
-
 int main(int argc, char** argv)
 {
 	BayesianSegmentation BayesSeg;
@@ -34,11 +16,10 @@ int main(int argc, char** argv)
     timer histtimer("Histogram:			" );	
 	timer btimer( 	"Calcbayes:			" );
     timer emtimer( 	"EM:				" );
-	timer objtimer( "Object seg:			" );
 
-	if (argc != 2)
+	/*if (argc != 2)
 	{
-		cout << " Usage: main a_sample_image" << endl;
+		cout << " Usage: main first_image" << endl;
 		return -1;
 	}
 
@@ -48,66 +29,77 @@ int main(int argc, char** argv)
 	{
 		cout << "Could not open or find the image" << endl;
 		return -1;
-	}
-	
-	// Create a window
-	int threshValue = 40;
-	namedWindow("My Window", 1);
+	}*/
+	Mat src, oldSrc;
+	string pathToData("./em_dataset/frame%d.png");
+	VideoCapture sequence(pathToData);
 
-	BayesSeg.sigmaInit(10, 10, 10, 20);
-	BayesSeg.miuInit(50, 130, 10, 10);
-	BayesSeg.probPLOUInit(0.2, 0.25, 0.25, 0.3);
+	BayesSeg.sigmaInit(20, 20, 20, 20);
+	BayesSeg.miuInit(60, 100, 40, 210);
+	BayesSeg.probPLOUInit(0.1, 0.2, 0.3, 0.4);
 	
+	sequence >> src;
+	cvtColor(src, src, CV_RGBA2GRAY);
+	BayesSeg.calcHistogram(&src);
+	BayesSeg.calcBayesian(src);
 	// In Linux, pgm image is loaded as color image????
-	Mat src1;
+	/*Mat src1;
 	if (src.channels() == 3)
 		cvtColor(src, src1, CV_RGB2GRAY);
 	else if (src.channels() == 4)
 		cvtColor(src, src1, CV_RGBA2GRAY);
 	else
-		src.copyTo(src1);
+		src.copyTo(src1);*/
 		
-	createTrackbar("Threshold", "My Window", &threshValue, 255, callBack, &src1);
-
 	for (int i = 0; i < 10; i++)
 	{
-		histtimer.start();
-		BayesSeg.calcHistogram(&src1);
-		histtimer.stop();
-
-		btimer.start();
-		BayesSeg.calcBayesian(src1);
-		btimer.stop();
-
+		oldSrc = src.clone();
+		sequence >> src;
+		cvtColor(src, src, CV_RGBA2GRAY);
+		if (src.empty())
+		{
+			cout << "End of Sequence" << endl;
+			waitKey(0);
+			break;
+		}
+		
+		//Update EM
 		emtimer.start();
-		BayesSeg.EM_update(src1);
+		BayesSeg.EM_update(oldSrc, src);
         emtimer.stop();
+		
+		// Calculate histogram
+		histtimer.start();
+		BayesSeg.calcHistogram(&src);
+		histtimer.stop();
+		
+		// Calculate posterior prob
+		btimer.start();
 		BayesSeg.Prior();
-
-		objtimer.start();
-		BayesSeg.ObjectSeg(src1, threshValue);
-		objtimer.stop();
-
+		BayesSeg.sigma.sigmaU = 20;
+		BayesSeg.miu.miuU = 210;
+		BayesSeg.calcBayesian(src);
+		btimer.stop();
+		
+		cout << "Sigma: " << BayesSeg.sigma.sigmaP << " - " << BayesSeg.sigma.sigmaL << " - " << BayesSeg.sigma.sigmaO << " - " << BayesSeg.sigma.sigmaU << endl;
+		cout << "Miu:	" << BayesSeg.miu.miuP << " - " << BayesSeg.miu.miuL << " - " << BayesSeg.miu.miuO << " - " << BayesSeg.miu.miuU << endl;
+		cout << "Omega: " << BayesSeg.omega.omegaP << " - " << BayesSeg.omega.omegaL << " - " << BayesSeg.omega.omegaO << " - " << BayesSeg.omega.omegaU << endl << endl;
+		
 		histtimer.printm();
         btimer.printm();
         emtimer.printm();
-   		objtimer.printm();
 	}
 	histtimer.aprintm();
     btimer.aprintm();
     emtimer.aprintm();
-	objtimer.aprintm();
 
-	cout << "Sum omega = " << ((BayesSeg.omega.omegaP + BayesSeg.omega.omegaL + BayesSeg.omega.omegaO + BayesSeg.omega.omegaU)) << endl;
+	/*cout << "Sum omega = " << ((BayesSeg.omega.omegaP + BayesSeg.omega.omegaL + BayesSeg.omega.omegaO + BayesSeg.omega.omegaU)) << endl;
 	
 	cout << BayesSeg.omega.omegaP << endl;
 	cout << BayesSeg.omega.omegaL << endl;
 	cout << BayesSeg.omega.omegaO << endl;
-	cout << BayesSeg.omega.omegaU << endl;
+	cout << BayesSeg.omega.omegaU << endl;*/
 	
-	waitKey(0);
+	//waitKey(0);
 	return 0;
 }
-
-
-
