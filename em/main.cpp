@@ -81,10 +81,11 @@ int main(int argc, char** argv)
 		BayesSeg.calcBayesian(src);
 		btimer.stop();
 		
+		cout <<" 	P  -  L  -  O  -  U" << endl;
 		cout << "Sigma: " << BayesSeg.sigma.sigmaP << " - " << BayesSeg.sigma.sigmaL << " - " << BayesSeg.sigma.sigmaO << " - " << BayesSeg.sigma.sigmaU << endl;
 		cout << "Miu:	" << BayesSeg.miu.miuP << " - " << BayesSeg.miu.miuL << " - " << BayesSeg.miu.miuO << " - " << BayesSeg.miu.miuU << endl;
 		cout << "Omega: " << BayesSeg.omega.omegaP << " - " << BayesSeg.omega.omegaL << " - " << BayesSeg.omega.omegaO << " - " << BayesSeg.omega.omegaU << endl << endl;
-		
+		cout <<  "\033[22;31m" << (((BayesSeg.miu.miuO < BayesSeg.miu.miuP) && (BayesSeg.miu.miuP < BayesSeg.miu.miuL))?"true":"false") << "\e[m" << endl;
 		histtimer.printm();
         btimer.printm();
         emtimer.printm();
