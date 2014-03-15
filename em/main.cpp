@@ -38,11 +38,12 @@ int main(int argc, char** argv)
 	
 	sequence >> src;
 	cvtColor(src, src, CV_RGBA2GRAY);
+	// This function will be called only at the start of program or when the process is restarted.
 	BayesSeg.calcProb();
 	
 	for (;;)
 	{
-		//Update EM
+		//Update EM: everything will be calculated in the "BayesSeg.EM_Bayes(src)" function.
 		emtimer.start();
 		BayesSeg.EM_Bayes(src);
         emtimer.stop();
