@@ -9,16 +9,18 @@
 #include <stdlib.h>
 #include <pthread.h>
 
-#define P_CONST					((double) 0.3989422804)
-#define UNDEF_DEFAULT_SIGMA		((double) 50)
-#define UNDEF_DEFAULT_MIU		((double) 180)
+
+#ifndef USE_THREAD
+#define USE_THREAD 1
+#endif
+#define P_CONST ((double) 0.3989422804)
 
 using namespace cv;
 using namespace std;
 
 class BayesianSegmentation
 {
-private:
+public:
 	static Mat GRAY_RANGE;
 
 	struct ProbX_PLOU
@@ -29,6 +31,14 @@ private:
 		Mat probX_U;
 	} probX_PLOU;
 
+	struct ProbPLOU_X
+	{
+		Mat probP_X;
+		Mat probL_X;
+		Mat probO_X;
+		Mat probU_X;
+	} probPLOU_X;
+
 	struct ProbPLOU
 	{
 		double probP;
@@ -38,51 +48,7 @@ private:
 	} probPLOU;
 
 	Mat ProbX;
-
-	Mat hist;
-
-	struct PassArg
-	{
-		Mat oldSrc;
-		Mat src;
-		Mat probX_PLOU;
-		Mat probX;
-		Mat probPLOU_X;
-		Mat hist;
-		double probPLOU;
-		double miu;
-		double sigma;
-		double omega;
-		int N;
-		int plouClass;
-		
-	};
-
-	enum ELEMENT_CLASSESS : int
-	{
-		PAVE = 0,
-		LANE,
-		OBJ,
-		UNDEF
-	};
-
-	int N;
-
-	void calcHistogram(Mat* img);
-
-	static void* calcProbThread(void* arg);
-
-	static void* EM_BayesThread(void* arg);
-
-public:
-	struct ProbPLOU_X
-	{
-		Mat probP_X;
-		Mat probL_X;
-		Mat probO_X;
-		Mat probU_X;
-	} probPLOU_X;
-
+	
 	struct  Sigma
 	{
 		double sigmaP;
@@ -106,11 +72,50 @@ public:
 		double omegaU;
 	} omega;
 
+	Mat hist;
+
+	struct PassArg
+	{
+		Mat oldSrc;
+		Mat src;
+		Mat probX_PLOU;
+		Mat probX;
+		Mat probPLOU_X;
+		Mat hist;
+		double probPLOU;
+		double miu;
+		double sigma;
+		double omega;
+		int N;
+	};
+
+	int N;
+
 	void writeCSV(Mat data, string fileName);
 
-	void calcProb(void);
+	void calcHistogram(Mat* img);
 
-	void EM_Bayes(Mat img);
+	static void* calcSingleProb(void* arg);
+
+	void calcProbThread(Mat img);
+
+	void calcProb(Mat img);
+
+	static void* calSingleProbPLOU_X(void* arg);
+
+	void calProbPLOU_XThread(void);
+
+	void calcBayesian(Mat img);
+
+	void calcSigma(Mat img);
+
+	static void* EM_updateSingleClass(void* arg);
+
+	void EM_updateThread(Mat oldImg, Mat img);
+
+	void EM_update(Mat oldImg, Mat img);
+
+	void Prior(void);
 
 	void sigmaInit(double sigmaP, double sigmaL, double sigmaO, double sigmaU);
 
