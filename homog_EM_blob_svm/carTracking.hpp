@@ -15,15 +15,15 @@ using namespace cv;
 using namespace std;
 
 // Define for Kalman filter
-#define DELAY_MS			( 30 )
-#define dt					( DELAY_MS/1000 )
+#define DELAY_MS			( 20 )
+#define dt					( (float)DELAY_MS/1000 )
 #define SAMPLE_FREQ			( 30 )
 #ifndef	dt
 #define dt					( 1/SAMPLE_FREQ )
 #endif
 
-#define	MEAS_NOISE			( 0.0005 )
-#define PROCESS_NOISE		( 100 )
+#define	MEAS_NOISE			( 5 )
+#define PROCESS_NOISE		( 10 )
 
 // Define for temporal filter
 #define NUM_IN_FRAMES		( 10 )
@@ -33,6 +33,8 @@ using namespace std;
 #define MIN_BLOB_AREA		( 1500.0f )
 #define MAX_BLOB_AREA		( 50000.0f )
 #define MIN_BOUND_BOX_EREA	( 1200 )
+
+
 
 // Define svm sliding window step
 #define SLIDE_STEP			( 15 )
@@ -53,7 +55,9 @@ private:
 
 	SimpleBlobDetector::Params params;
 
-	// Object candidate
+	/* ---------------------------------------------------------------------------------
+	*							SIMPLE BLOB DETECTION
+	* --------------------------------------------------------------------------------*/
 	struct ObjCand
 	{
 		// Initialize value for ObjCand
@@ -61,27 +65,17 @@ private:
 					match(false),
 					inFrs(0),
 					outFrs(0),
-					width(0),
-					Pt(Point(0, 0)),
-					lastBox(0) {}
-		bool	inFilter;
-		bool	match;			// 
-		int		inFrs;			// Number of consecutive frame to include in the filter
-		int		outFrs;			// Number of consecutive frame to exclude in the filter
-		Point	Pt;				// The Position of ObjCand
-		int		width;			// The approximate width of object
-		Point	lowestPt;		// The lowest point of object
-		int		lastBox;
-	};
-
-	struct CarKalmanFilter
-	{
-		KalmanFilter	KF;
-		//Mat_<float>		measurement;
-		//Mat_<float>		prediction;
-		//Mat_<float>		estimated;
-		Point			truePos;
-		int				objCandIdx;
+					lastBox(0),
+					Pos(Point(0, 0)) {}
+		bool			inFilter;
+		bool			match;			// 
+		int				inFrs;			// Number of consecutive frame to include in the filter
+		int				outFrs;			// Number of consecutive frame to exclude in the filter		
+		Point			Pos;			// The Position of ObjCand
+		int				lastBox;		
+		KalmanFilter	KFx;
+		KalmanFilter	KFy;
+		Point			filterPos;
 	};
 
 	vector< Point > obj2KF;
@@ -100,18 +94,20 @@ private:
 
 	double similarity(Mat* img, ObjCand* objC, KeyPoint* kpt);
 
-	void addNewKF(int objCandIdx);
+	/* ---------------------------------------------------------------------------------
+	*								KALMAN FILTER
+	* --------------------------------------------------------------------------------*/
 
-	int updateKFidx(int objCanIdx);
+	void initKalman(int objCandIdx);
 
-	/* Bounding contour boxes */
+	/* ---------------------------------------------------------------------------------
+	*								BOUNDING BOXES
+	* --------------------------------------------------------------------------------*/
 	vector< vector< Point > > contours;
 
 	vector< Vec4i > hierarchy;
 
 	vector< vector< Point > > contours_poly;
-
-	
 
 public:
 	// Initialize CarTracking paramaters
@@ -120,10 +116,10 @@ public:
 	// LUT for the size of bounding box for objects
 	static int boxSize[17];
 
-	/* Simple blob detection */
+	/* ---------------------------------------------------------------------------------
+	*							SIMPLE BLOB DETECTION
+	* --------------------------------------------------------------------------------*/
 	vector< ObjCand > objCands;
-
-	vector< CarKalmanFilter > CarKFs;
 
 	Ptr< FeatureDetector > blob_detector;
 
@@ -133,20 +129,33 @@ public:
 
 	void detect_filter(Mat* img);
 
-	/* Bounding contour boxes */
+	/* ---------------------------------------------------------------------------------
+	*								BOUNDING BOXES
+	* --------------------------------------------------------------------------------*/
 	vector< Rect > boundRect;
 
 	void findBoundContourBox(Mat* img);
 	
-	/* Kalman filter */
+	/* ---------------------------------------------------------------------------------
+	*								KALMAN FILTER
+	* --------------------------------------------------------------------------------*/
 	void updateKF(void);
 
-	/* SVM */
+	/* ---------------------------------------------------------------------------------
+	*								CAR SVM PREDICT
+	* --------------------------------------------------------------------------------*/
 	CarSVM carsvm;
-	
+
+	void boundBox(Mat* img, Point* p, Rect* box, int idx);
+
 	void cropBoundObj(Mat* src, Mat* dst, Mat* invH, Rect* carBox, int objCandIdx);
 
 	bool carSVMpredict(Mat* img, Rect* carBox, double classType, const svm_model *carModel, int objCandIdx);
+
+	/* ---------------------------------------------------------------------------------
+	*								SOBEL
+	* --------------------------------------------------------------------------------*/
+	void doSobel(Mat* img, Mat* dst);
 };
 
 

@@ -169,21 +169,41 @@ int main(int argc, char** argv)
 		BayesSeg.classSeg(&frame, &obj, BayesSeg.OBJ);
 		morphotimer.stop();
 		morphotimer.printm();
+		
+		// Blob contour bounding box
+		//carTrack.findBoundContourBox(&obj);
+		
+		// Blob detection
+		carTrack.detect_filter(&obj);
 				
 		
 		// Blob detection
 		blobtimer.start();
-		carTrack.detect_filter(&obj);
-	 	for (unsigned int i = 0; i < carTrack.objCands.size(); i++)
+		Mat objTmp = obj.clone();
+		cvtColor(objTmp, objTmp, CV_GRAY2RGB);
+		char zBuffer[35];
+		for (unsigned int i = 0; i < carTrack.objCands.size(); i++)
 		{
 			//circle(obj, carTrack.objCands[i].Pt, 3, Scalar(0, 0, 255), -1);
 			if (carTrack.objCands[i].inFilter)
 			{
 				Mat highProbCarImg;
 				Rect bigbox, smallbox;
+				Point filterPos;
+
+				
+				circle(objTmp, carTrack.objCands[i].Pos, 3, Scalar(255, 0, 0), -1);
+				circle(objTmp, carTrack.objCands[i].filterPos, 3, Scalar(0, 255, 0), -1);
+				pointHomogToPointOrig(&invH, &carTrack.objCands[i].filterPos, &filterPos);
+				circle(orig, filterPos, 2, Scalar(0, 0, 255), -1);
 				carTrack.cropBoundObj(&orig, &highProbCarImg, &invH, &bigbox, i);
 				//imshow("highProbCarImg", highProbCarImg);
 				rectangle(orig, bigbox, Scalar(0, 255, 0), 3);
+				// copy the text to the "zBuffer"
+				//_snprintf_s(zBuffer, 35, "l: %d", cvRound(bigbox.height/1.5));
+
+				//put the text in the "zBuffer" to the "dst" image
+				//putText(orig, zBuffer, bigbox.tl(), CV_FONT_HERSHEY_COMPLEX, 0.8, Scalar(255, 0, 0), 2);
 				if (carTrack.carSVMpredict(&highProbCarImg, &smallbox, carsvm.POS, carModel, i))
 				{
 					//cout << "car detected" << endl;
@@ -202,13 +222,14 @@ int main(int argc, char** argv)
 		blobtimer.stop();
 		blobtimer.printm();
 		
-		imshow("Obj morphology", obj);
+		//imshow("Obj morphology", obj);
+		imshow("Object", objTmp);
 		imshow("Original", orig);
 		
 		frametimer.stop();
 		frametimer.printm();
 		cout << endl << endl;
-		if (waitKey(30) == 27) //wait for 'esc' key press for 30ms. If 'esc' key is pressed, break loop
+		if (waitKey(DELAY_MS) == 27) //wait for 'esc' key press for 30ms. If 'esc' key is pressed, break loop
 		{
 			cout << "esc key is pressed by user" << endl;
 			break;
