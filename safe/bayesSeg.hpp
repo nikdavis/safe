@@ -2,6 +2,8 @@
 #ifndef __BAYES_SEG_HPP__
 #define __BAYES_SEG_HPP__
 
+#include <opencv2/opencv.hpp>
+
 #define P_CONST                 ((double) 0.3989422804)     // 1/sqrt(2*pi)
 #define UNDEF_DEFAULT_SIGMA     ((double) 50)
 #define UNDEF_DEFAULT_MIU       ((double) 250)
@@ -61,11 +63,11 @@ public:
     } omega;
 
     void calcProb( void );
-    void EM_Bayes( cv::Mat img );
+    void EM_Bayes( const cv::Mat &img );
     void sigmaInit( double sigmaP, double sigmaL, double sigmaO, double sigmaU );
     void miuInit( double miuP, double miuL, double miuO, double miuU );
     void probPLOUInit( double probP, double probL, double probO, double probU );
-    void classSeg( cv::Mat &img, cv::Mat &obj, e_class cl );
+    void classSeg( const cv::Mat &img, cv::Mat &obj, e_class cl );
 
 private:
     static cv::Mat GRAY_RANGE;
@@ -92,7 +94,7 @@ private:
 
     int N;
 
-    void calcHistogram( cv::Mat* img );
+    void calcHistogram( const cv::Mat &img );
     static void* calcProbThread( void* arg );
     static void* EM_BayesThread( void* arg );
 };

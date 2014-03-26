@@ -1,7 +1,5 @@
-#include <opencv2/imgproc/imgproc.hpp>
 #include "bayesSeg.hpp"
 #include <pthread.h>
-#include <fstream>
 
 using namespace cv;
 
@@ -29,9 +27,9 @@ Mat BayesianSegmentation::GRAY_RANGE = (Mat_<float>(256, 1) <<
  * incorrect. Therefore, the 0-value points causing by homography transformation
  * are assumed taking 90% of 0-value points in a whole image.
  */
-void BayesianSegmentation::calcHistogram( Mat* img )
+void BayesianSegmentation::calcHistogram( const Mat &img )
 {
-    N = img->size().area();
+    N = img.size().area();
 
     /// Establish the number of bins
     int histSize = 256;
@@ -43,7 +41,7 @@ void BayesianSegmentation::calcHistogram( Mat* img )
     bool accumulate = false;
 
     /// Compute the histograms:
-    calcHist(img, 1, 0, Mat(), hist, 1, &histSize, &histRange, uniform, accumulate);
+    calcHist(&img, 1, 0, Mat(), hist, 1, &histSize, &histRange, uniform, accumulate);
     float before = hist.at<float>(0);
     hist.at<float>(0) = before / 10;
 
@@ -121,9 +119,9 @@ void* BayesianSegmentation::EM_BayesThread( void* arg )
     divide(args->probX_PLOU, args->probX, args->probPLOU_X);
 
     // Calculate omega
-    Mat omega;
-    multiply(args->probPLOU_X, args->hist, omega);
-    args->omega = sum(omega)[0] / args->N;
+    Mat m_omega;
+    multiply(args->probPLOU_X, args->hist, m_omega);
+    args->omega = sum(m_omega)[0] / args->N;
 
     // update probPLOU
     args->probPLOU = args->omega;
@@ -166,7 +164,7 @@ void* BayesianSegmentation::EM_BayesThread( void* arg )
     return 0;
 }
 
-void BayesianSegmentation::EM_Bayes( Mat img )
+void BayesianSegmentation::EM_Bayes( const Mat &img )
 {
     // calculate the probability of X
     //ProbX = probX_P*probP + probX_L*probL + probX_O*probO + probX_U*probU;
@@ -175,7 +173,7 @@ void BayesianSegmentation::EM_Bayes( Mat img )
     add(ProbX, probX_PLOU.probX_U, ProbX);
 
     // Calculate the histogram of homography image
-    calcHistogram(&img);
+    calcHistogram(img);
 
     // EM update for P / L / O / U in four seperated threads
     pthread_t thread1, thread2, thread3, thread4;
@@ -269,34 +267,33 @@ void BayesianSegmentation::probPLOUInit( double probP, double probL, double prob
     probPLOU.probU = probU;
 }
 
-void BayesianSegmentation::classSeg( Mat &img, Mat &obj, e_class cl )
+void BayesianSegmentation::classSeg( const Mat &img, Mat &obj, e_class cl )
 {
     switch ( cl )
     {
     case PAVE:
         probPLOU_X.probP_X.at<float>(0) = 0;
-        threshold( probPLOU_X.probP_X, probPLOU_X.probP_X, PROB_THRESHOLD, 1, CV_THRESH_BINARY );
+        threshold( probPLOU_X.probP_X, probPLOU_X.probP_X, PROB_THRESHOLD, 255, CV_THRESH_BINARY );
         LUT( img, probPLOU_X.probP_X, obj );
         break;
     case LANE:
         probPLOU_X.probL_X.at<float>(0) = 0;
-        threshold( probPLOU_X.probL_X, probPLOU_X.probL_X, PROB_THRESHOLD, 1, CV_THRESH_BINARY );
+        threshold( probPLOU_X.probL_X, probPLOU_X.probL_X, PROB_THRESHOLD, 255, CV_THRESH_BINARY );
         LUT( img, probPLOU_X.probL_X, obj );
         break;
     case OBJ:
         probPLOU_X.probO_X.at<float>(0) = 0;
-        threshold( probPLOU_X.probO_X, probPLOU_X.probO_X, PROB_THRESHOLD, 1, CV_THRESH_BINARY );
+        threshold( probPLOU_X.probO_X, probPLOU_X.probO_X, PROB_THRESHOLD, 255, CV_THRESH_BINARY );
         LUT( img, probPLOU_X.probO_X, obj );
         break;
     case UNDEF:
         probPLOU_X.probU_X.at<float>(0) = 0;
-        threshold( probPLOU_X.probU_X, probPLOU_X.probU_X, PROB_THRESHOLD, 1, CV_THRESH_BINARY );
+        threshold( probPLOU_X.probU_X, probPLOU_X.probU_X, PROB_THRESHOLD, 255, CV_THRESH_BINARY );
         LUT( img, probPLOU_X.probU_X, obj );
         break;
     }
 
     // Normalize the obj image to grayscale
-    normalize(obj, obj, 0, 255, NORM_MINMAX);
     obj.convertTo(obj, CV_8U);
 }
 

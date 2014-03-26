@@ -7,7 +7,7 @@
 #include "MSAC.hpp"
 #include "homography.hpp"
 #include "bayesSeg.hpp"
-#include "opencv2/opencv.hpp"
+#include <opencv2/opencv.hpp>
 #include <string>
 #include <cmath>
 
@@ -239,11 +239,11 @@ int main( int argc, char* argv[] ) {
         etimer.stop();
 
         //** Create object image
-        //bayes_seg.classSeg( i_frame, obj_frame, OBJ );
+        bayes_seg.classSeg( i_frame, obj_frame, OBJ );
 
         //** Perform opening
         cv::Mat kernel = getStructuringElement(cv::MORPH_RECT, cv::Size(5, 5));
-        //morphologyEx(obj_frame, obj_frame, cv::MORPH_OPEN, kernel);
+        morphologyEx(obj_frame, obj_frame, cv::MORPH_OPEN, kernel);
 
         //** Perform blob detection
         //** Generate distance value
