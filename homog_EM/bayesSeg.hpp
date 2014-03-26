@@ -11,7 +11,7 @@
 
 #define P_CONST					((double) 0.3989422804)
 #define UNDEF_DEFAULT_SIGMA		((double) 50)
-#define UNDEF_DEFAULT_MIU		((double) 180)
+#define UNDEF_DEFAULT_MIU		((double) 250)
 
 using namespace cv;
 using namespace std;

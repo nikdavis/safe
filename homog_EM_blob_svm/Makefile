@@ -1,0 +1,52 @@
+CC = g++
+OUTPUT = main
+CFLAGS = -Wall -std=c++11 -Wconversion -O3 -fPIC -U_FORTIFY_SOURCE
+INCLUDE = `pkg-config --cflags opencv`
+SHVER = 2
+OS = $(shell uname)
+#IPP directory
+IPP_DIR = -L /opt/intel/composer_xe_2013_sp1.0.061/ipp/lib/intel64
+IPP_DIR += -L /opt/intel/composer_xe_2013_sp1.0.061/compiler/lib/intel64
+LIBS = ${IPP_DIR} `pkg-config --libs opencv`
+
+OBJS = main.o svm.o homography.o bayesSeg.o timer.o carTracking.o helpFn.o  CarSVM.o
+
+all: ${OUTPUT}
+
+lib: svm.o
+	if [ "$(OS)" = "Darwin" ]; then \
+		SHARED_LIB_FLAG="-dynamiclib -Wl,-install_name,libsvm.so.$(SHVER)"; \
+	else \
+		SHARED_LIB_FLAG="-shared -Wl,-soname,libsvm.so.$(SHVER)"; \
+	fi; \
+	$(CC) $${SHARED_LIB_FLAG} svm.o -o libsvm.so.$(SHVER)
+
+${OUTPUT}: ${OBJS}
+	${CC} -o ${OUTPUT} ${OBJS} ${LIBS}
+
+main.o: main.cpp
+	${CC} ${INCLUDE} ${CFLAGS} -c main.cpp
+
+homography.o: homography.cpp homography.hpp
+	${CC} ${INCLUDE} ${CFLAGS} -c homography.cpp
+	
+bayesSeg.o: bayesSeg.cpp bayesSeg.hpp
+	${CC} ${INCLUDE} ${CFLAGS} -c bayesSeg.cpp
+
+timer.o: timer.cpp timer.hpp
+	${CC} ${INCLUDE} ${CFLAGS} -c timer.cpp
+	
+carTracking.o: carTracking.cpp carTracking.hpp
+	${CC} ${INCLUDE} ${CFLAGS} -c carTracking.cpp
+	
+helpFn.o: helpFn.cpp helpFn.hpp
+	${CC} ${INCLUDE} ${CFLAGS} -c helpFn.cpp
+	
+CarSVM.o: CarSVM.cpp CarSVM.hpp svm.o
+	${CC} ${INCLUDE} ${CFLAGS} -c CarSVM.cpp 
+
+svm.o: svm.cpp svm.hpp
+	${CC} ${INCLUDE} ${CFLAGS} -c svm.cpp
+
+clean:
+	rm -f *.o $(OUTPUT) libsvm.so.$(SHVER)

@@ -289,15 +289,47 @@ void BayesianSegmentation::probPLOUInit(double probP, double probL, double probO
 	probPLOU.probU = probU;
 }
 
-void BayesianSegmentation::ObjectSeg(Mat img, double threshValue)
+void BayesianSegmentation::classSeg(Mat* img, Mat* obj, int cl)
 {
-	Mat objMask;
-	threshold(img, objMask, threshValue, 255, THRESH_BINARY_INV);
+	switch (cl)
+	{
+	case PAVE:
+		probPLOU_X.probP_X.at<float>(0) = 0;
+		threshold(probPLOU_X.probP_X, probPLOU_X.probP_X, PROB_THRESHOLD, 1, CV_THRESH_BINARY);
+		LUT(*img, probPLOU_X.probP_X, *obj);
+		break;
+	case LANE:
+		probPLOU_X.probL_X.at<float>(0) = 0;
+		threshold(probPLOU_X.probL_X, probPLOU_X.probL_X, PROB_THRESHOLD, 1, CV_THRESH_BINARY);
+		LUT(*img, probPLOU_X.probL_X, *obj);
+		break;
+	case OBJ:
+		probPLOU_X.probO_X.at<float>(0) = 0;
+		threshold(probPLOU_X.probO_X, probPLOU_X.probO_X, PROB_THRESHOLD, 1, CV_THRESH_BINARY);
+		LUT(*img, probPLOU_X.probO_X, *obj);
+		break;
+	case UNDEF:
+		probPLOU_X.probU_X.at<float>(0) = 0;
+		threshold(probPLOU_X.probU_X, probPLOU_X.probU_X, PROB_THRESHOLD, 1, CV_THRESH_BINARY);
+		LUT(*img, probPLOU_X.probU_X, *obj);
+		break;
+	}
+	
+	// Normalize the obj image to grayscale
+	normalize(*obj, *obj, 0, 255, NORM_MINMAX);
+	obj->convertTo(*obj, CV_8U);
 
-	Mat kernel = getStructuringElement(MORPH_RECT, Size(5, 5));
-
-	//apply morphology filter to the image
-	morphologyEx(objMask, objMask, MORPH_OPEN, kernel);
-	imshow("My Window", objMask);
+	//// Apply morphology filter
+	int iKernelSize = 5;
+	Mat kernel = getStructuringElement(MORPH_RECT, Size(iKernelSize, iKernelSize));
+	morphologyEx(*obj, *obj, MORPH_OPEN, kernel);
+	if (cl == OBJ)
+	{
+		Mat dilateKernel = Mat(15, 1, CV_8UC1);
+		dilateKernel.setTo(Scalar(1));
+		dilate(*obj, *obj, dilateKernel);
+		Mat erodeKernel = Mat(1, 7, CV_8UC1);
+		erodeKernel.setTo(Scalar(1));
+		erode(*obj, *obj, erodeKernel, Point(), 2);
+	}
 }
-

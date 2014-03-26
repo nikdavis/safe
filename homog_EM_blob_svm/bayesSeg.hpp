@@ -11,7 +11,8 @@
 
 #define P_CONST					((double) 0.3989422804)
 #define UNDEF_DEFAULT_SIGMA		((double) 50)
-#define UNDEF_DEFAULT_MIU		((double) 180)
+#define UNDEF_DEFAULT_MIU		((double) 250)
+#define PROB_THRESHOLD			((double) 0.7 )
 
 using namespace cv;
 using namespace std;
@@ -58,14 +59,6 @@ private:
 		
 	};
 
-	enum ELEMENT_CLASSESS : int
-	{
-		PAVE = 0,
-		LANE,
-		OBJ,
-		UNDEF
-	};
-
 	int N;
 
 	void calcHistogram(Mat* img);
@@ -75,6 +68,14 @@ private:
 	static void* EM_BayesThread(void* arg);
 
 public:
+	enum ELEMENT_CLASSESS : int
+	{
+		PAVE = 0,
+		LANE,
+		OBJ,
+		UNDEF
+	};
+
 	struct ProbPLOU_X
 	{
 		Mat probP_X;
@@ -118,7 +119,7 @@ public:
 
 	void probPLOUInit(double probP, double probL, double probO, double probU);
 
-	void ObjectSeg(Mat img, double thresValue);
+	void classSeg(Mat* img, Mat* obj, int cl);
 };
 
 #endif /*__BAYES_SEG_HPP__*/

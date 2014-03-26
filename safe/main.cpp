@@ -6,19 +6,30 @@
 #include "timer.hpp"
 #include "MSAC.hpp"
 #include "homography.hpp"
-#include "opencv2/opencv.hpp"
+#include "bayesSeg.hpp"
+#include <opencv2/opencv.hpp>
 #include <string>
 #include <cmath>
 
+// Pause after processing each frame
+#define SINGLE_STEP             true
+
+#define PRINT_TIMES             false
+#define PRINT_VP                false
+#define PRINT_ANGLES            false
+#define PRINT_STATS             false
+
 inline void lane_marker_filter( const cv::Mat &src, cv::Mat &dst );
 void init_vp_kalman( cv::KalmanFilter &KF );
+void mean_stddev( const cv::Mat &src, float &mean, float &stddev );
 inline void show_hough( cv::Mat &dst, const std::vector<cv::Vec4i> lines );
 inline bool calc_intersect( const cv::Vec4i l1, const cv::Vec4i l2,
                                                 cv::Point &intersect );
 
 int main( int argc, char* argv[] ) {
-    cvwin win_frame( "frame" );
-    cvwin win_hough( "hough" );
+    cvwin win_a( "i_frame" );
+    cvwin win_b( "hough_frame" );
+    cvwin win_c( "obj_frame" );
     timer ltimer( "Lane filter         " );
     timer ctimer( "Canny edge detection" );
     timer htimer( "Hough transform     " );
@@ -26,11 +37,18 @@ int main( int argc, char* argv[] ) {
     timer ktimer( "Kalman filter VP    " );
     timer hmtimer( "Homography          " );
     timer ptimer( "Process frame       " );
+    timer etimer( "EM update           " );
     frame_source* fsrc = NULL;
-    cv::Mat frame, lmf_frame, hough_frame, bird_frame;
+    cv::Mat frame, lmf_frame, hough_frame, i_frame, mask_frame, obj_frame;
     MSAC msac;
     cv::Size image_size;
     cv::KalmanFilter vpkf( 4, 2, 0 );// 4 dynamic, 2 measurement, and no control
+    float prev_mu, prev_sigma;
+    BayesianSegmentation bayes_seg;
+
+    // Force update on first frame
+    prev_mu = -1000.0;
+    prev_sigma = -1000.0;
 
     cv::Mat_<float> vp = cv::Mat::zeros( 2, 1, CV_32FC1 );
     int key = -1;
@@ -87,7 +105,7 @@ int main( int argc, char* argv[] ) {
 
     srand( 0 );   // For repeatable testing, always seed RNG with zero
     init_vp_kalman( vpkf );
-
+    
     // Request and process frames until source indicates EOF
     while ( fsrc->get_frame( frame ) == 0 ) {
         ptimer.start();
@@ -95,6 +113,7 @@ int main( int argc, char* argv[] ) {
         //** Filter frame for gradient steps up/down horizontally -> lmf_frame
         ltimer.start();
         lane_marker_filter( frame, lmf_frame );
+        cv::normalize( lmf_frame, lmf_frame, 0, 255, cv::NORM_MINMAX, CV_8UC1 );
         ltimer.stop();
 
         //** Perform Canny edge detection on lmf_frame -> lmf_frame
@@ -127,7 +146,7 @@ int main( int argc, char* argv[] ) {
 
         //** RANSAC hough line intersections for vanishing point
         rtimer.start();
-        cv::Mat _vp;
+        cv::Mat _vp;    // Temporary holder
         std::vector<cv::Point> aux;
         std::vector<std::vector<cv::Point> > lineSegments;
         std::vector<int> numInliers;
@@ -153,7 +172,6 @@ int main( int argc, char* argv[] ) {
 
         //** Kalman filter RANSAC result
         ktimer.start();
-
         cv::Mat_<float> pvp(2,1);
  	vp = vpkf.predict();
         if( vp_detected ) {
@@ -161,63 +179,98 @@ int main( int argc, char* argv[] ) {
             pvp(0) = _vp.at<float>(0,0);
             pvp(1) = _vp.at<float>(1,0);
             // Dont update unless VP detected AND it was within frame dimensions
-            if ( ( pvp(0) > 0 ) && ( pvp(0) < fsrc->frame_width() ) &&
-                 ( pvp(1) > 0 ) && ( pvp(1) < fsrc->frame_height() ) ) {
+            if ( ( pvp(0) >= 0 ) && ( pvp(0) < fsrc->frame_width() ) &&
+                 ( pvp(1) >= 0 ) && ( pvp(1) < fsrc->frame_height() ) ) {
                         vp = vpkf.correct( pvp );
-#if PRINT_VP
-                        cout << pvp(0) << "," << pvp(1) << endl;
-#endif
+                        if ( PRINT_VP ) cout << "VP: " << pvp(0) << ","
+                                             << pvp(1) << endl;
             } else {
-#if PRINT_VP
-                        cout << -1 << "," << -1 << endl;
-#endif
+                        if ( PRINT_VP ) cout << "VP: ND, ND" << endl;
             }
         }
         ktimer.stop();
-        /* Variables for homography */
+        draw_cross( hough_frame, cv::Point( vp(0,0), vp(1,0) ),
+                                 cv::Scalar( 0, 255, 0 ), 4 );
+
+        //** homography on frame using filtered intersection -> i_frame
         float theta, gamma;
         cv::Mat H;
         hmtimer.start();
-        calcAnglesFromVP(pvp, theta, gamma);
-        generateHomogMat(H, -theta, -gamma);
-        planeToPlaneHomog(frame, bird_frame, H, 400);
+        calcAnglesFromVP( vp, theta, gamma );
+        generateHomogMat( H, -theta, -gamma );
+        planeToPlaneHomog( frame, i_frame, H, 400 );
         hmtimer.stop();
-#if PRINT_ANGLES
-        cout << theta << "," << gamma << endl;
-#endif
-        draw_cross( hough_frame, cv::Point( vp(0,0), vp(1,0) ), cv::Scalar( 0, 255, 0 ), 4 );
+        if ( PRINT_ANGLES ) cout << "ANGLE: " << theta << "," << gamma << endl;
 
-        //** homography on frame using filtered intersection -> i_frame
-        //** Sobel gradient filter on i_frame -> mask_frame
-        //** dilation of mask_frame -> mask_frame
-        //** remove mask_frame from i_frame -> ip_frame
-        //** ip_mu and ip_sigma of ip_frame pixels values calculated
-        //** threshold i_frame above ip_mu + ( 3 * ip_sigma ) -> il_frame
-        //** threshold i_frame below ip_mu - ( 3 * ip_sigma ) -> io_frame
-        //** lane filter applied to i_frame -> l_frame
-        //** l_mu and l_sigma of l_frame pixel values calculated
-        //** threshold l_frame above l_mu + l_sigma -> ll_frame
-        //** threshold l_frame below l_mu - l_sigma -> lpo_frame
-        //** ll_mu and ll_sigma of ll_frame pixels values calculated
-        //** lpo_mu and lpo_sigma of lpo_frame pixels values calculated
-        // EM stuff using calculated parameters ... ?
+        //** Calculate homog. intensity feature frame mu and sigma
+        float mu, sigma;
+        mean_stddev( i_frame, mu, sigma );
+        if ( PRINT_STATS )
+            std::cout << "MU: " << mu << " SIGMA: " << sigma << std::endl;
+
+        //** If stats significantly different from last frame, reseed EM algor.
+        if ( ( std::abs( mu    - prev_mu    ) > MU_DELTA    ) || 
+             ( std::abs( sigma - prev_sigma ) > SIGMA_DELTA ) ) {
+            DMESG( "Significant stat. deltas, reseeding EM algorithm" );
+            //** Sobel gradient filter on i_frame -> mask_frame
+            //** Dilation of mask_frame -> mask_frame
+            //** Remove mask_frame from i_frame -> ip_frame
+            //** Calculate ip_mu and ip_sigma of ip_frame pixels values
+            //** Threshold i_frame above ip_mu + ( 3 * ip_sigma ) -> il_frame
+            //** Threshold i_frame below ip_mu - ( 3 * ip_sigma ) -> io_frame
+            //** Apply lane filter to i_frame -> l_frame
+            //** l_mu and l_sigma of l_frame pixel values calculated
+            //** Threshold l_frame above l_mu + l_sigma -> ll_frame
+            //** Threshold l_frame below l_mu - l_sigma -> lpo_frame
+            //** Calculate ll_mu and ll_sigma of ll_frame pixels values
+            //** Calculate lpo_mu and lpo_sigma of lpo_frame pixels values
+            //** Reseed (init) EM
+
+            // TODO: This is just placeholder init code, should do above!
+            bayes_seg.sigmaInit(10, 10, 10, UNDEF_DEFAULT_SIGMA);
+			bayes_seg.miuInit(100, 210, 30, UNDEF_DEFAULT_MIU);
+			bayes_seg.probPLOUInit(0.25, 0.25, 0.25, 0.25);
+			bayes_seg.calcProb();
+        }
+        prev_mu = mu;
+        prev_sigma = sigma;
+
+        //** Update EM
+        etimer.start();
+        bayes_seg.EM_Bayes( i_frame );
+        etimer.stop();
+
+        //** Create object image
+        bayes_seg.classSeg( i_frame, obj_frame, OBJ );
+
+        //** Perform opening
+        cv::Mat kernel = getStructuringElement(cv::MORPH_RECT, cv::Size(5, 5));
+        morphologyEx(obj_frame, obj_frame, cv::MORPH_OPEN, kernel);
+
+        //** Perform blob detection
+        //** Generate distance value
+        //** tracking stuff...
+        //** (new car addition, old car removal, correlation, etc)
 
         ptimer.stop();
 
         // Update frame displays
-        win_frame.display_frame( bird_frame );
-        win_hough.display_frame( hough_frame );
+        win_a.display_frame( i_frame );
+        win_b.display_frame( hough_frame );
+        win_c.display_frame( obj_frame );
 
-#if PRINT_TIMES
-        // Print timer results
-        ltimer.printu();
-        ctimer.printu();
-        htimer.printu();
-        rtimer.printu();
-        ktimer.printu();
-        hmtimer.printu();
-        ptimer.printm();
-#endif
+        if ( PRINT_TIMES ) {
+            // Print timer results
+            ltimer.printu();
+            ctimer.printu();
+            htimer.printu();
+            rtimer.printu();
+            ktimer.printu();
+            hmtimer.printu();
+            etimer.printu();
+            ptimer.printm();
+        }
+
         // Check for key presses and allow highgui to process events
         if ( SINGLE_STEP ) {
             do { key = cv::waitKey( 1 ); } while( key < 0 );
@@ -226,16 +279,19 @@ int main( int argc, char* argv[] ) {
         else if( ( key = cv::waitKey( 1 ) ) >= 0 ) break;
     }
     DMESG( "Done processing frames" );
-#if PRINT_TIMES
-    // Print average timer results
-    ltimer.aprintu();
-    ctimer.aprintu();
-    htimer.aprintu();
-    rtimer.aprintu();
-    ktimer.aprintu();
-    hmtimer.aprintu();
-    ptimer.aprintm();
-#endif
+
+    if ( PRINT_TIMES ) {
+        // Print average timer results
+        ltimer.aprintu();
+        ctimer.aprintu();
+        htimer.aprintu();
+        rtimer.aprintu();
+        ktimer.aprintu();
+        hmtimer.aprintu();
+        etimer.aprintu();
+        ptimer.aprintm();
+    }
+
     // Pause if no key was pressed during processing loop
     if ( !SINGLE_STEP ) while( key < 0 ) key = cv::waitKey( 1 );
 
@@ -248,9 +304,10 @@ inline void lane_marker_filter( const cv::Mat &src, cv::Mat &dst ) {
     int tau_cnt = 0;
     int tau = ROTATE_TAU ? MIN_TAU : TAU;
 
+    //TODO: May save some time if this alloc is moved outside/done once
     dst = cv::Mat::zeros( src.rows, src.cols, CV_8UC1 );
 
-    for ( int row = 0; row < src.rows; ++row ) {
+    for ( int row = src.rows / 2; row < src.rows; ++row ) {
         const uchar *s = src.ptr<uchar>(row);
         uchar *d = dst.ptr<uchar>(row);
 
@@ -300,6 +357,24 @@ void init_vp_kalman( cv::KalmanFilter &KF )
 
     cv::setIdentity( KF.measurementNoiseCov, cv::Scalar::all( MEAS_NOISE * MEAS_NOISE ) );
     cv::setIdentity( KF.errorCovPost, cv::Scalar::all( 0.00001 ) );
+}
+
+// Assumes unsigned byte (uchar) elements
+void mean_stddev( const cv::Mat &src, float &mean, float &stddev ) {
+    int hist[256]; // Automatics of fund. types are init. to zero
+    int accum = 0;
+    int size = src.rows * src.cols; // Number of elements
+    uchar *pelements = src.data;
+    for ( int i = 0; i < size; ++i, ++pelements ) {
+        ++hist[*pelements];
+        accum += *pelements;
+    }
+    mean = accum / ( float ) size;
+    for ( int i = 0, accum = 0; i < 256; ++i ) {
+        float delta = ( float ) i - mean;
+        accum += ( float ) hist[i] * ( delta * delta );
+    }
+    stddev = std::sqrt( accum / ( float ) size );
 }
 
 inline void show_hough( cv::Mat &dst, const std::vector<cv::Vec4i> lines ) {

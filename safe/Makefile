@@ -8,7 +8,7 @@ OCVLIBS += -L /opt/intel/composer_xe_2013_sp1.0.061/compiler/lib/intel64
 OCVLIBS += -lflycapture-c `pkg-config --libs opencv`
 
 OBJS  = lmmin.o errorNIETO.o MSAC.o fireflymv_camera.o fsource.o cvwin.o
-OBJS += timer.o main.o homography.o
+OBJS += timer.o homography.o bayesSeg.o main.o
 
 default : CFLAGS += -O3
 default : $(OUTPUT)
@@ -21,7 +21,7 @@ all: ${OUTPUT}
 $(OUTPUT) : $(OBJS)
 	$(CC) -o $(OUTPUT) $(OBJS) $(OCVLIBS)
 
-main.o : main.cpp defs.hpp fsource.hpp timer.hpp cvwin.hpp MSAC.hpp
+main.o : main.cpp defs.hpp fsource.hpp timer.hpp cvwin.hpp MSAC.hpp bayesSeg.hpp
 	$(CC) $(OCVFLAGS) $(CFLAGS) -c main.cpp
 
 homography.o: homography.cpp homography.hpp
@@ -47,6 +47,9 @@ errorNIETO.o : errorNIETO.cpp errorNIETO.hpp
 
 lmmin.o : lmmin.c lmmin.h lmstruct.h
 	$(CC) $(OCVFLAGS) $(CFLAGS) -c lmmin.c
+
+bayesSeg.o : bayesSeg.cpp bayesSeg.hpp
+	$(CC) $(OCVFLAGS) $(CFLAGS) -c bayesSeg.cpp
 
 clean:
 	rm -f *.o $(OUTPUT)
