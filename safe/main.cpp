@@ -104,6 +104,14 @@ int main( int argc, char* argv[] ) {
 
     srand( 0 );   // For repeatable testing, always seed RNG with zero
     init_vp_kalman( vpkf );
+    
+    // EDIT by Tuan:
+    // This 4 functions need to be called when the program start
+    bayes_seg.sigmaInit(10, 10, 10, UNDEF_DEFAULT_SIGMA);
+    bayes_seg.miuInit(100, 210, 30, UNDEF_DEFAULT_MIU);
+    bayes_seg.probPLOUInit(0.25, 0.25, 0.25, 0.25);
+    bayes_seg.calcProb();
+    //-------------------------------------------------------
 
     // Request and process frames until source indicates EOF
     while ( fsrc->get_frame( frame ) == 0 ) {
@@ -226,9 +234,12 @@ int main( int argc, char* argv[] ) {
             //** Reseed (init) EM
 
             // TODO: This is just placeholder init code, should do above!
-            bayes_seg.sigmaInit(10, 10, 10, 20);
-            bayes_seg.miuInit(50, 130, 10, 10);
-            bayes_seg.probPLOUInit(0.2, 0.25, 0.25, 0.3);
+            bayes_seg.sigmaInit(10, 10, 10, UNDEF_DEFAULT_SIGMA);
+			bayes_seg.miuInit(100, 210, 30, UNDEF_DEFAULT_MIU);
+			bayes_seg.probPLOUInit(0.25, 0.25, 0.25, 0.25);
+			
+			// EDIT by Tuan:
+			bayes_seg.calcProb();
         }
         prev_mu = mu;
         prev_sigma = sigma;
