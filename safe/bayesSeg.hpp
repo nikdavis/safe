@@ -2,127 +2,99 @@
 #ifndef __BAYES_SEG_HPP__
 #define __BAYES_SEG_HPP__
 
-//#include <opencv2/core/core.hpp>
+#define P_CONST                 ((double) 0.3989422804)     // 1/sqrt(2*pi)
+#define UNDEF_DEFAULT_SIGMA     ((double) 50)
+#define UNDEF_DEFAULT_MIU       ((double) 250)
+#define PROB_THRESHOLD          ((double) 0.7 )
 
-#ifndef USE_THREAD
-#define USE_THREAD 1
-#endif
+enum e_class { PAVE, LANE, OBJ, UNDEF };
 
-// 1/sqrt(2*pi)
-#define P_CONST ((double) 0.3989422804)
+struct PassArg
+{
+    cv::Mat oldSrc;
+    cv::Mat src;
+    cv::Mat probX_PLOU;
+    cv::Mat probX;
+    cv::Mat probPLOU_X;
+    cv::Mat hist;
+    double probPLOU;
+    double miu;
+    double sigma;
+    double omega;
+    int N;
+    int plouClass;
+};
 
 class BayesianSegmentation
 {
 public:
-	static cv::Mat GRAY_RANGE;
-	
-	struct InterVar
-	{
-		cv::Mat interP;
-		cv::Mat interL;
-		cv::Mat interO;
-		cv::Mat interU;
-	} interVarPLOU;
+    struct ProbPLOU_X
+    {
+        cv::Mat probP_X;
+        cv::Mat probL_X;
+        cv::Mat probO_X;
+        cv::Mat probU_X;
+    } probPLOU_X;
 
-	struct ProbX_PLOU
-	{
-		cv::Mat probX_P;
-		cv::Mat probX_L;
-		cv::Mat probX_O;
-		cv::Mat probX_U;
-	} probX_PLOU;
+    struct  Sigma
+    {
+        double sigmaP;
+        double sigmaL;
+        double sigmaO;
+        double sigmaU;
+    } sigma;
 
-	struct ProbPLOU_X
-	{
-		cv::Mat probP_X;
-		cv::Mat probL_X;
-		cv::Mat probO_X;
-		cv::Mat probU_X;
-	} probPLOU_X;
+    struct Miu
+    {
+        double miuP;
+        double miuL;
+        double miuO;
+        double miuU;
+    } miu;
 
-	struct ProbPLOU
-	{
-		double probP;
-		double probL;
-		double probO;
-		double probU;
-	} probPLOU;
+    struct Omega
+    {
+        double omegaP;
+        double omegaL;
+        double omegaO;
+        double omegaU;
+    } omega;
 
-	cv::Mat ProbX;
-	
-	struct  Sigma
-	{
-		double sigmaP;
-		double sigmaL;
-		double sigmaO;
-		double sigmaU;
-	} sigma;
-	struct Miu
-	{
-		double miuP;
-		double miuL;
-		double miuO;
-		double miuU;
-	} miu;
+    void calcProb( void );
+    void EM_Bayes( cv::Mat img );
+    void sigmaInit( double sigmaP, double sigmaL, double sigmaO, double sigmaU );
+    void miuInit( double miuP, double miuL, double miuO, double miuU );
+    void probPLOUInit( double probP, double probL, double probO, double probU );
+    void classSeg( cv::Mat &img, cv::Mat &obj, e_class cl );
 
-	struct Omega
-	{
-		double omegaP;
-		double omegaL;
-		double omegaO;
-		double omegaU;
-	} omega;
+private:
+    static cv::Mat GRAY_RANGE;
 
-	cv::Mat hist;
+    struct ProbX_PLOU
+    {
+        cv::Mat probX_P;
+        cv::Mat probX_L;
+        cv::Mat probX_O;
+        cv::Mat probX_U;
+    } probX_PLOU;
 
-	struct PassArg
-	{
-		cv::Mat src;
-		cv::Mat probX_PLOU;
-		cv::Mat probX;
-		cv::Mat probPLOU_X;
-		cv::Mat hist;
-		cv::Mat interVar;
-		double probPLOU;
-		double miu;
-		double sigma;
-		double omega;
-		int N;
-	};
+    struct ProbPLOU
+    {
+        double probP;
+        double probL;
+        double probO;
+        double probU;
+    } probPLOU;
 
-	int N;
+    cv::Mat ProbX;
 
-	void calcHistogram(cv::Mat &img);
+    cv::Mat hist;
 
-	static void* calcSingleProb(void* arg);
+    int N;
 
-	void calcProbThread(cv::Mat &img);
-
-	void calcProb(cv::Mat &img);
-
-	static void* calSingleProbPLOU_X(void* arg);
-
-	void calProbPLOU_XThread(void);
-
-	void calcBayesian(cv::Mat &img);
-
-	void calcSigma(void);
-
-	static void* EM_updateSingleClass(void* arg);
-
-	void EM_updateThread(cv::Mat &img);
-
-	void EM_update(cv::Mat img);
-
-	void Prior(void);
-
-	void sigmaInit(double sigmaP, double sigmaL, double sigmaO, double sigmaU);
-
-	void miuInit(double miuP, double miuL, double miuO, double miuU);
-
-	void probPLOUInit(double probP, double probL, double probO, double probU);
-
-	void ObjectSeg(const cv::Mat &img, double thresValue, cv::Mat &objMask) const;
+    void calcHistogram( cv::Mat* img );
+    static void* calcProbThread( void* arg );
+    static void* EM_BayesThread( void* arg );
 };
 
 #endif /*__BAYES_SEG_HPP__*/

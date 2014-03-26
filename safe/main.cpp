@@ -235,15 +235,16 @@ int main( int argc, char* argv[] ) {
 
         //** Update EM
         etimer.start();
-        bayes_seg.calcHistogram( i_frame );
-        bayes_seg.calcBayesian( i_frame );
-        bayes_seg.EM_update( i_frame );
-        bayes_seg.Prior();
-        bayes_seg.ObjectSeg( i_frame, 40, obj_frame );
+        bayes_seg.EM_Bayes( i_frame );
         etimer.stop();
 
         //** Create object image
+        //bayes_seg.classSeg( i_frame, obj_frame, OBJ );
+
         //** Perform opening
+        cv::Mat kernel = getStructuringElement(cv::MORPH_RECT, cv::Size(5, 5));
+        //morphologyEx(obj_frame, obj_frame, cv::MORPH_OPEN, kernel);
+
         //** Perform blob detection
         //** Generate distance value
         //** tracking stuff...
@@ -303,7 +304,7 @@ inline void lane_marker_filter( const cv::Mat &src, cv::Mat &dst ) {
     //TODO: May save some time if this alloc is moved outside/done once
     dst = cv::Mat::zeros( src.rows, src.cols, CV_8UC1 );
 
-    for ( int row = 0; row < src.rows; ++row ) {
+    for ( int row = src.rows / 2; row < src.rows; ++row ) {
         const uchar *s = src.ptr<uchar>(row);
         uchar *d = dst.ptr<uchar>(row);
 
