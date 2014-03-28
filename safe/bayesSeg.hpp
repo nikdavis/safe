@@ -38,39 +38,39 @@ public:
         cv::Mat probU_X;
     } probPLOU_X;
 
-    struct  Sigma
-    {
-        double sigmaP;
-        double sigmaL;
-        double sigmaO;
-        double sigmaU;
-    } sigma;
-
-    struct Miu
-    {
-        double miuP;
-        double miuL;
-        double miuO;
-        double miuU;
-    } miu;
-
-    struct Omega
-    {
-        double omegaP;
-        double omegaL;
-        double omegaO;
-        double omegaU;
-    } omega;
-
     void calcProb( void );
     void EM_Bayes( const cv::Mat &img );
     void sigmaInit( double sigmaP, double sigmaL, double sigmaO, double sigmaU );
     void miuInit( double miuP, double miuL, double miuO, double miuU );
     void probPLOUInit( double probP, double probL, double probO, double probU );
-    void classSeg( const cv::Mat &img, cv::Mat &obj, e_class cl );
+    void classSeg( const cv::Mat &img, cv::Mat &obj, e_class cl ) const;
 
 private:
     static cv::Mat GRAY_RANGE;
+
+    struct  Sigma
+    {
+        double P;
+        double L;
+        double O;
+        double U;
+    } sigma;
+
+    struct Miu
+    {
+        double P;
+        double L;
+        double O;
+        double U;
+    } miu;
+
+    struct Omega
+    {
+        double P;
+        double L;
+        double O;
+        double U;
+    } omega;
 
     struct ProbX_PLOU
     {

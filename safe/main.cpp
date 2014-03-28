@@ -14,10 +14,10 @@
 // Pause after processing each frame
 #define SINGLE_STEP             true
 
-#define PRINT_TIMES             false
+#define PRINT_TIMES             true
 #define PRINT_VP                false
 #define PRINT_ANGLES            false
-#define PRINT_STATS             false
+#define PRINT_STATS             true
 
 inline void lane_marker_filter( const cv::Mat &src, cv::Mat &dst );
 void init_vp_kalman( cv::KalmanFilter &KF );
@@ -36,10 +36,11 @@ int main( int argc, char* argv[] ) {
     timer rtimer( "RANSAC              " );
     timer ktimer( "Kalman filter VP    " );
     timer hmtimer( "Homography          " );
-    timer ptimer( "Process frame       " );
     timer etimer( "EM update           " );
+    timer itimer( "EM initialization   " );
+    timer ptimer( "Process frame       " );
     frame_source* fsrc = NULL;
-    cv::Mat frame, lmf_frame, hough_frame, i_frame, mask_frame, obj_frame;
+    cv::Mat frame, lmf_frame, hough_frame, i_frame, obj_frame;
     MSAC msac;
     cv::Size image_size;
     cv::KalmanFilter vpkf( 4, 2, 0 );// 4 dynamic, 2 measurement, and no control
@@ -105,7 +106,10 @@ int main( int argc, char* argv[] ) {
 
     srand( 0 );   // For repeatable testing, always seed RNG with zero
     init_vp_kalman( vpkf );
-    
+
+    // Set dst frame size for lane marker filter once
+    lmf_frame = cv::Mat::zeros( image_size.height, image_size.width, CV_8UC1 );
+
     // Request and process frames until source indicates EOF
     while ( fsrc->get_frame( frame ) == 0 ) {
         ptimer.start();
@@ -173,7 +177,7 @@ int main( int argc, char* argv[] ) {
         //** Kalman filter RANSAC result
         ktimer.start();
         cv::Mat_<float> pvp(2,1);
- 	vp = vpkf.predict();
+        vp = vpkf.predict();
         if( vp_detected ) {
             // Convert _vp from RANSAC to something Kalman filter likes, 2x1 Mat
             pvp(0) = _vp.at<float>(0,0);
@@ -209,31 +213,51 @@ int main( int argc, char* argv[] ) {
             std::cout << "MU: " << mu << " SIGMA: " << sigma << std::endl;
 
         //** If stats significantly different from last frame, reseed EM algor.
+        itimer.start();
         if ( ( std::abs( mu    - prev_mu    ) > MU_DELTA    ) || 
              ( std::abs( sigma - prev_sigma ) > SIGMA_DELTA ) ) {
             DMESG( "Significant stat. deltas, reseeding EM algorithm" );
-            //** Sobel gradient filter on i_frame -> mask_frame
-            //** Dilation of mask_frame -> mask_frame
-            //** Remove mask_frame from i_frame -> ip_frame
-            //** Calculate ip_mu and ip_sigma of ip_frame pixels values
-            //** Threshold i_frame above ip_mu + ( 3 * ip_sigma ) -> il_frame
-            //** Threshold i_frame below ip_mu - ( 3 * ip_sigma ) -> io_frame
-            //** Apply lane filter to i_frame -> l_frame
-            //** l_mu and l_sigma of l_frame pixel values calculated
-            //** Threshold l_frame above l_mu + l_sigma -> ll_frame
-            //** Threshold l_frame below l_mu - l_sigma -> lpo_frame
-            //** Calculate ll_mu and ll_sigma of ll_frame pixels values
-            //** Calculate lpo_mu and lpo_sigma of lpo_frame pixels values
-            //** Reseed (init) EM
+            cv::Mat mask_frame, ip_frame, il_frame, io_frame, l_frame;
+            float ip_mu, ip_sigma, il_mu, il_sigma, io_mu, io_sigma;
 
-            // TODO: This is just placeholder init code, should do above!
-            bayes_seg.sigmaInit(10, 10, 10, UNDEF_DEFAULT_SIGMA);
-			bayes_seg.miuInit(100, 210, 30, UNDEF_DEFAULT_MIU);
-			bayes_seg.probPLOUInit(0.25, 0.25, 0.25, 0.25);
+            //** Sobel gradient filter on i_frame -> mask_frame
+            cv::Sobel( i_frame, mask_frame, CV_16S, 1, 0 );
+            cv::convertScaleAbs( mask_frame, mask_frame );
+            cv::threshold( mask_frame, mask_frame, 80, 255, CV_THRESH_BINARY_INV );
+
+            //** Dilation (erode because of inver.) of mask_frame -> mask_frame
+            cv::erode( mask_frame, mask_frame, cv::Mat(), cv::Point(-1,-1), 4 );
+
+            //** Remove mask_frame from i_frame -> ip_frame
+            i_frame.copyTo( ip_frame, mask_frame );
+
+            //** Calculate ip_mu and ip_sigma of ip_frame pixels values
+            mean_stddev( ip_frame, ip_mu, ip_sigma );
+
+            //** Threshold i_frame above ip_mu + ( 3 * ip_sigma ) -> il_frame
+            cv::threshold( i_frame, il_frame, ip_mu + ( 3.0 * ip_sigma ), 255, CV_THRESH_TOZERO );
+            mean_stddev( il_frame, il_mu, il_sigma );
+
+            //** Threshold i_frame below ip_mu - ( 3 * ip_sigma ) -> io_frame
+            cv::threshold( i_frame, io_frame, ip_mu - ( 3.0 * ip_sigma ), 255, CV_THRESH_TOZERO_INV );
+            mean_stddev( io_frame, io_mu, io_sigma );
+
+            //** Reseed (init) EM
+            bayes_seg.sigmaInit( 10, 10, 10, UNDEF_DEFAULT_SIGMA );
+			bayes_seg.miuInit( 100, 210, 30, UNDEF_DEFAULT_MIU );
+            //bayes_seg.sigmaInit( ip_sigma, il_sigma, io_sigma, UNDEF_DEFAULT_SIGMA );
+			//bayes_seg.miuInit( ip_mu, il_mu, io_mu, UNDEF_DEFAULT_MIU );
+			bayes_seg.probPLOUInit( 0.45, 0.10, 0.40, 0.5 );
 			bayes_seg.calcProb();
+
+            if ( PRINT_STATS )
+                std::cout << "IP_MU: " << ip_mu << " IP_SIGMA: " << ip_sigma << std::endl;
+                std::cout << "IL_MU: " << il_mu << " IL_SIGMA: " << il_sigma << std::endl;
+                std::cout << "IO_MU: " << io_mu << " IO_SIGMA: " << io_sigma << std::endl;
         }
         prev_mu = mu;
         prev_sigma = sigma;
+        itimer.stop();
 
         //** Update EM
         etimer.start();
@@ -267,8 +291,10 @@ int main( int argc, char* argv[] ) {
             rtimer.printu();
             ktimer.printu();
             hmtimer.printu();
+            itimer.printu();
             etimer.printu();
             ptimer.printm();
+            std::cout << std::endl;
         }
 
         // Check for key presses and allow highgui to process events
@@ -288,6 +314,7 @@ int main( int argc, char* argv[] ) {
         rtimer.aprintu();
         ktimer.aprintu();
         hmtimer.aprintu();
+        itimer.aprintu();
         etimer.aprintu();
         ptimer.aprintm();
     }
@@ -303,9 +330,6 @@ inline void lane_marker_filter( const cv::Mat &src, cv::Mat &dst ) {
     int aux;
     int tau_cnt = 0;
     int tau = ROTATE_TAU ? MIN_TAU : TAU;
-
-    //TODO: May save some time if this alloc is moved outside/done once
-    dst = cv::Mat::zeros( src.rows, src.cols, CV_8UC1 );
 
     for ( int row = src.rows / 2; row < src.rows; ++row ) {
         const uchar *s = src.ptr<uchar>(row);
@@ -359,18 +383,24 @@ void init_vp_kalman( cv::KalmanFilter &KF )
     cv::setIdentity( KF.errorCovPost, cv::Scalar::all( 0.00001 ) );
 }
 
-// Assumes unsigned byte (uchar) elements
+// Assumes unsigned byte (uchar) elements, doesn't count zero elements
 void mean_stddev( const cv::Mat &src, float &mean, float &stddev ) {
-    int hist[256]; // Automatics of fund. types are init. to zero
+    int hist[256] = {0};
     int accum = 0;
     int size = src.rows * src.cols; // Number of elements
     uchar *pelements = src.data;
-    for ( int i = 0; i < size; ++i, ++pelements ) {
+    for ( uchar *endp = pelements + size; pelements < endp; ++pelements ) {
         ++hist[*pelements];
-        accum += *pelements;
+        if ( *pelements == 0 ) --size;
+        else accum += *pelements;
+    }
+    if ( size == 0 ) { // If image was empty, zero params and return
+        mean = 0;
+        stddev = 0;
+        return;
     }
     mean = accum / ( float ) size;
-    for ( int i = 0, accum = 0; i < 256; ++i ) {
+    for ( int i = 1, accum = 0; i < 256; ++i ) {
         float delta = ( float ) i - mean;
         accum += ( float ) hist[i] * ( delta * delta );
     }

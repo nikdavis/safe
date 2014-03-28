@@ -43,9 +43,9 @@ void BayesianSegmentation::calcHistogram( const Mat &img )
     /// Compute the histograms:
     calcHist(&img, 1, 0, Mat(), hist, 1, &histSize, &histRange, uniform, accumulate);
     float before = hist.at<float>(0);
-    hist.at<float>(0) = before / 10;
+    hist.at<float>(0) = before * 0.1;
 
-    N -= cvRound(9 * before / 10);
+    N -= cvRound( before * 0.9 );
 }
 
 void* BayesianSegmentation::calcProbThread( void* arg )
@@ -57,10 +57,10 @@ void* BayesianSegmentation::calcProbThread( void* arg )
     Mat subMat, powMat, divMat, expMat, finalMat, outMat;
     subtract(GRAY_RANGE, args->miu, subMat);                // X - miu
     pow(subMat, 2, powMat);                                 // (X - miu).^2
-    divide(powMat, 2 * args->sigma * args->sigma, divMat);  // (X-miu).^2/(2*sigma^2)
+    divide(powMat, 2.0 * args->sigma * args->sigma, divMat);// (X-miu).^2/(2*sigma^2)
     exp(-divMat, expMat);                                   // exp(-(X-miu).^2/(2*sigma^2));
     p = P_CONST / args->sigma;                              // (1/(sigma*sqrt(2*pi)))
-    finalMat = expMat*p;                                    // (1/sigma*sqrt(2*pi))*exp(-(X-miu).^2/sigma.^2);
+    finalMat = expMat * p;                                  // (1/sigma*sqrt(2*pi))*exp(-(X-miu).^2/sigma.^2);
     args->probX_PLOU = finalMat*args->probPLOU;
     return 0;
 }
@@ -77,23 +77,23 @@ void BayesianSegmentation::calcProb( void )
     pthread_t thread1, thread2, thread3, thread4;
     PassArg passArg1, passArg2, passArg3, passArg4;
 
-    passArg1.miu = miu.miuP;
-    passArg1.sigma = sigma.sigmaP;
+    passArg1.miu = miu.P;
+    passArg1.sigma = sigma.P;
     passArg1.probPLOU = probPLOU.probP;
     pthread_create(&thread1, NULL, calcProbThread, static_cast<void*>(&passArg1));
 
-    passArg2.miu = miu.miuL;
-    passArg2.sigma = sigma.sigmaL;
+    passArg2.miu = miu.L;
+    passArg2.sigma = sigma.L;
     passArg2.probPLOU = probPLOU.probL;
     pthread_create(&thread2, NULL, calcProbThread, static_cast<void*>(&passArg2));
 
-    passArg3.miu = miu.miuO;
-    passArg3.sigma = sigma.sigmaO;
+    passArg3.miu = miu.O;
+    passArg3.sigma = sigma.O;
     passArg3.probPLOU = probPLOU.probO;
     pthread_create(&thread3, NULL, calcProbThread, static_cast<void*>(&passArg3));
 
-    passArg4.miu = miu.miuU;
-    passArg4.sigma = sigma.sigmaU;
+    passArg4.miu = miu.U;
+    passArg4.sigma = sigma.U;
     passArg4.probPLOU = probPLOU.probU;
     pthread_create(&thread4, NULL, calcProbThread, static_cast<void*>(&passArg4));
 
@@ -134,7 +134,7 @@ void* BayesianSegmentation::EM_BayesThread( void* arg )
         Mat miu;
         multiply(GRAY_RANGE, args->probPLOU_X, miu);
         multiply(miu, args->hist, miu);
-        args->miu = (sum(miu)[0]) / (args->N*args->omega);
+        args->miu = sum(miu)[0] / (args->N*args->omega);
     }
     else
         args->miu = UNDEF_DEFAULT_MIU;
@@ -149,7 +149,7 @@ void* BayesianSegmentation::EM_BayesThread( void* arg )
     {
         multiply(args->probPLOU_X, powMat, sigma);
         multiply(sigma, args->hist, sigma);
-        args->sigma = sqrt((sum(sigma)[0]) / (args->N * args->omega)) + 1;
+        args->sigma = sqrt((sum(sigma)[0]) / (args->N * args->omega)) + 1.0;
     }
     else
         args->sigma = UNDEF_DEFAULT_SIGMA;
@@ -212,20 +212,20 @@ void BayesianSegmentation::EM_Bayes( const Mat &img )
     pthread_join(thread3, NULL);
     pthread_join(thread4, NULL);
 
-    miu.miuP = arg1.miu;
-    miu.miuL = arg2.miu;
-    miu.miuO = arg3.miu;
-    miu.miuU = arg4.miu;
+    miu.P = arg1.miu;
+    miu.L = arg2.miu;
+    miu.O = arg3.miu;
+    miu.U = arg4.miu;
 
-    omega.omegaP = arg1.omega;
-    omega.omegaL = arg2.omega;
-    omega.omegaO = arg3.omega;
-    omega.omegaU = arg4.omega;
+    omega.P = arg1.omega;
+    omega.L = arg2.omega;
+    omega.O = arg3.omega;
+    omega.U = arg4.omega;
 
-    sigma.sigmaP = arg1.sigma;
-    sigma.sigmaL = arg2.sigma;
-    sigma.sigmaO = arg3.sigma;
-    sigma.sigmaU = arg4.sigma;
+    sigma.P = arg1.sigma;
+    sigma.L = arg2.sigma;
+    sigma.O = arg3.sigma;
+    sigma.U = arg4.sigma;
 
     probPLOU_X.probP_X = arg1.probPLOU_X;
     probPLOU_X.probL_X = arg2.probPLOU_X;
@@ -241,22 +241,27 @@ void BayesianSegmentation::EM_Bayes( const Mat &img )
     probPLOU.probL = arg2.probPLOU;
     probPLOU.probO = arg3.probPLOU;
     probPLOU.probU = arg4.probPLOU;
+
+    probPLOU_X.probP_X.at<float>(0) = 0;
+    probPLOU_X.probL_X.at<float>(0) = 0;
+    probPLOU_X.probO_X.at<float>(0) = 0;
+    probPLOU_X.probU_X.at<float>(0) = 0;
 }
 
 void BayesianSegmentation::sigmaInit( double sigmaP, double sigmaL, double sigmaO, double sigmaU )
 {
-    sigma.sigmaP = sigmaP;
-    sigma.sigmaL = sigmaL;
-    sigma.sigmaO = sigmaO;
-    sigma.sigmaU = sigmaU;
+    sigma.P = sigmaP;
+    sigma.L = sigmaL;
+    sigma.O = sigmaO;
+    sigma.U = sigmaU;
 }
 
 void BayesianSegmentation::miuInit( double miuP, double miuL, double miuO, double miuU )
 {
-    miu.miuP = miuP;
-    miu.miuL = miuL;
-    miu.miuO = miuO;
-    miu.miuU = miuU;
+    miu.P = miuP;
+    miu.L = miuL;
+    miu.O = miuO;
+    miu.U = miuU;
 }
 
 void BayesianSegmentation::probPLOUInit( double probP, double probL, double probO, double probU )
@@ -267,27 +272,23 @@ void BayesianSegmentation::probPLOUInit( double probP, double probL, double prob
     probPLOU.probU = probU;
 }
 
-void BayesianSegmentation::classSeg( const Mat &img, Mat &obj, e_class cl )
+void BayesianSegmentation::classSeg( const Mat &img, Mat &obj, e_class cl ) const
 {
     switch ( cl )
     {
     case PAVE:
-        probPLOU_X.probP_X.at<float>(0) = 0;
         threshold( probPLOU_X.probP_X, probPLOU_X.probP_X, PROB_THRESHOLD, 255, CV_THRESH_BINARY );
         LUT( img, probPLOU_X.probP_X, obj );
         break;
     case LANE:
-        probPLOU_X.probL_X.at<float>(0) = 0;
         threshold( probPLOU_X.probL_X, probPLOU_X.probL_X, PROB_THRESHOLD, 255, CV_THRESH_BINARY );
         LUT( img, probPLOU_X.probL_X, obj );
         break;
     case OBJ:
-        probPLOU_X.probO_X.at<float>(0) = 0;
         threshold( probPLOU_X.probO_X, probPLOU_X.probO_X, PROB_THRESHOLD, 255, CV_THRESH_BINARY );
         LUT( img, probPLOU_X.probO_X, obj );
         break;
     case UNDEF:
-        probPLOU_X.probU_X.at<float>(0) = 0;
         threshold( probPLOU_X.probU_X, probPLOU_X.probU_X, PROB_THRESHOLD, 255, CV_THRESH_BINARY );
         LUT( img, probPLOU_X.probU_X, obj );
         break;
