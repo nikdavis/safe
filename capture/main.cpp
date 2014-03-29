@@ -19,11 +19,18 @@ using namespace cv;
 #define CAM_WIDTH		640
 #define CAM_HEIGHT		480
 #define FOURCC			CV_FOURCC('F','M','P','4')
+#define SHOW_CAPTURE    1
+#define WIN_NAME        "Capture view"
 
 
 int main(int argc, char *argv[])
 {
     FireflyMVCamera camera;
+    int showCap = SHOW_CAPTURE;
+    if(showCap) {
+        namedWindow(WIN_NAME, 1);                  // Create a window for display.
+        cout << "Show capture: " << showCap << endl;
+    }
 
     /* Parse arguments */
     if(argc != 3) {
@@ -67,6 +74,11 @@ int main(int argc, char *argv[])
     {
     	camera.grabFrame(src);
     	outputVideo << src;
+        if(showCap) {
+            imshow(WIN_NAME, src);
+            char c = waitKey(10);
+            if( c == 27 ) break;
+        }
     	frameCount++;
     	if(frameCount % INPUT_FPS == 0) {
     		seconds++;

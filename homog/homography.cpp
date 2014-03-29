@@ -15,7 +15,7 @@
 /* This is "in pixels" which are relative to the image sensor size */
 #define Z_TRANSLATION	(309)
 #define CAM_RES_Y		(480)
-#define CAM_RES_X		(854)
+#define CAM_RES_X		(640)
 #define FOCAL_IN_PX		(550)
 #define OUTPUT_SIZE_X	(416)
 #define OUTPUT_SIZE_Y	(480)

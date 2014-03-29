@@ -78,7 +78,7 @@ int main()
 	createTrackbar("yaw", "Frame", &yaw_int, 180, &callback);
     //createTrackbar("tz", "Frame", &tz_int, 10000, &callback);
     //createTrackbar("f", "Frame", &f_int, 500, &callback);
-	VideoCapture cap("../MVI_5248_bw_480p.mp4"); // open the video file for reading
+	VideoCapture cap("../capture/videos/capture60_20140228_114934.avi"); // open the video file for reading
 
     if(!cap.isOpened())  // if not success, exit program
 	{

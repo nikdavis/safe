@@ -20,7 +20,7 @@ typedef unsigned char uchar;
 #define ROTATE_TAU              false
 #define MIN_TAU                 5
 #define MAX_TAU                 15
-#define TAU                     7
+#define TAU                     10
 #define TAU_DELTA               10
 #define LANE_FILTER_ROW_OFFSET  0
 

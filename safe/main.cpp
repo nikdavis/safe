@@ -5,6 +5,7 @@
 #include "cvwin.hpp"
 #include "timer.hpp"
 #include "MSAC.hpp"
+#include "kalman.hpp"
 #include "homography.hpp"
 #include "bayesSeg.hpp"
 #include <opencv2/opencv.hpp>
@@ -26,10 +27,25 @@ inline void show_hough( cv::Mat &dst, const std::vector<cv::Vec4i> lines );
 inline bool calc_intersect( const cv::Vec4i l1, const cv::Vec4i l2,
                                                 cv::Point &intersect );
 
+
+/* Calibration data --- This is static and we need to include it as
+ * a header because other libs (ie homography - ie Mat K) need it as well.*/
+double cameraData[] = {  6.3117175205641183e+02, 0., 3.1950000000000000e+02,
+                        0., 6.3117175205641183e+02, 2.3950000000000000e+02,
+                        0., 0., 1.};
+double distCoeffData[] = {  -4.1605062165297507e-01, 2.6505676737778694e-01,
+                            -5.2493360426022302e-03, -2.5224864678663654e-03,
+                            -1.4925040070852708e-01 };
+cv::Mat cameraMat = cv::Mat(3, 3, CV_64F, cameraData).clone();
+cv::Mat distCoeffMat = cv::Mat(5, 1, CV_64F, distCoeffData).clone();
+
+
 int main( int argc, char* argv[] ) {
-    cvwin win_a( "i_frame" );
+    int undist = 1;
+    cvwin win_a( "bird_frame" );
     cvwin win_b( "hough_frame" );
     cvwin win_c( "obj_frame" );
+    timer utimer( "Undistort           " );
     timer ltimer( "Lane filter         " );
     timer ctimer( "Canny edge detection" );
     timer htimer( "Hough transform     " );
@@ -40,11 +56,13 @@ int main( int argc, char* argv[] ) {
     timer itimer( "EM initialization   " );
     timer ptimer( "Process frame       " );
     frame_source* fsrc = NULL;
-    cv::Mat frame, lmf_frame, hough_frame, i_frame, obj_frame;
+
+    cv::Mat frame_raw, frame, lmf_frame, hough_frame, bird_frame, obj_frame;
     MSAC msac;
     cv::Size image_size;
-    cv::KalmanFilter vpkf( 4, 2, 0 );// 4 dynamic, 2 measurement, and no control
-    float prev_mu, prev_sigma;
+	Kalman1D theta(-7.0, 0.005, 0.00005);
+    Kalman1D gamma(1.5, 0.001, 0.00005);		/* Kalman filters for Theta, Gamma */
+	float prev_mu, prev_sigma;
     BayesianSegmentation bayes_seg;
 
     // Force update on first frame
@@ -104,15 +122,26 @@ int main( int argc, char* argv[] ) {
     image_size.height = fsrc->frame_height();
     msac.init( MODE_NIETO, image_size );
 
-    srand( 0 );   // For repeatable testing, always seed RNG with zero
-    init_vp_kalman( vpkf );
-
     // Set dst frame size for lane marker filter once
     lmf_frame = cv::Mat::zeros( image_size.height, image_size.width, CV_8UC1 );
 
     // Request and process frames until source indicates EOF
-    while ( fsrc->get_frame( frame ) == 0 ) {
+    while ( fsrc->get_frame( frame_raw ) == 0 ) {
         ptimer.start();
+
+	    /* Explicitly undistorting our FireflyMV camera */
+
+        utimer.start();
+        if(undist) {
+	        cv::undistort(frame_raw, frame, cameraMat, distCoeffMat);
+        } else {
+            frame = frame_raw;
+        }
+        utimer.stop();
+
+		/* Gaussian helps preprocess noise out for LMF/Canny/Hough */
+        cv::GaussianBlur( frame, frame, cv::Size(3, 3), 0, 0 );
+        cv::GaussianBlur( frame, frame, cv::Size(3, 3), 0, 0 );
 
         //** Filter frame for gradient steps up/down horizontally -> lmf_frame
         ltimer.start();
@@ -120,10 +149,13 @@ int main( int argc, char* argv[] ) {
         cv::normalize( lmf_frame, lmf_frame, 0, 255, cv::NORM_MINMAX, CV_8UC1 );
         ltimer.stop();
 
+		/* Debating where to do the Gaussian (before/after LMF */
+        cv::GaussianBlur( frame, frame, cv::Size(3, 3), 0, 0 );
+        cv::GaussianBlur( frame, frame, cv::Size(3, 3), 0, 0 );
         //** Perform Canny edge detection on lmf_frame -> lmf_frame
         ctimer.start();
         // src, dst, low threshold, high threshold, kernel size, accurate
-        cv::Canny( lmf_frame, lmf_frame, 100, 200, 3, false );
+        cv::Canny( lmf_frame, lmf_frame, 60, 170, 3, false );
         ctimer.stop();
 
         //** Perform Hough transform on lmf_frame, generating vector of lines
@@ -174,41 +206,49 @@ int main( int argc, char* argv[] ) {
         rtimer.stop();
         if ( vp_detected ) msac.drawCS( hough_frame, lineSegmentsClusters, _vp );
 
-        //** Kalman filter RANSAC result
+        /* Process Kalman */
         ktimer.start();
         cv::Mat_<float> pvp(2,1);
-        vp = vpkf.predict();
+        float thetaAng, gammaAng, thetaDelta, gammaDelta;
         if( vp_detected ) {
-            // Convert _vp from RANSAC to something Kalman filter likes, 2x1 Mat
+            /* Convert _vp from RANSAC to something Kalman filter likes, 2x1 Mat */
             pvp(0) = _vp.at<float>(0,0);
             pvp(1) = _vp.at<float>(1,0);
-            // Dont update unless VP detected AND it was within frame dimensions
-            if ( ( pvp(0) >= 0 ) && ( pvp(0) < fsrc->frame_width() ) &&
-                 ( pvp(1) >= 0 ) && ( pvp(1) < fsrc->frame_height() ) ) {
-                        vp = vpkf.correct( pvp );
-                        if ( PRINT_VP ) cout << "VP: " << pvp(0) << ","
-                                             << pvp(1) << endl;
+            /* Convert to units of Kalman filter */
+            calcAnglesFromVP(pvp, thetaAng, gammaAng);
+            /* Only process if the delta is sane */
+            thetaDelta = abs(thetaAng - theta.xHat);
+            gammaDelta = abs(gammaAng - gamma.xHat);
+            if(thetaDelta < 15.0) {
+            	theta.addMeas(thetaAng);
             } else {
-                        if ( PRINT_VP ) cout << "VP: ND, ND" << endl;
+            	theta.skipMeas();
             }
+            if(gammaDelta < 20.0) {
+            	gamma.addMeas(gammaAng);
+            } else {
+            	gamma.skipMeas();
+            }
+        } else {
+        	theta.skipMeas();
+        	gamma.skipMeas();
         }
         ktimer.stop();
         draw_cross( hough_frame, cv::Point( vp(0,0), vp(1,0) ),
                                  cv::Scalar( 0, 255, 0 ), 4 );
 
-        //** homography on frame using filtered intersection -> i_frame
-        float theta, gamma;
-        cv::Mat H;
+        /* Generate IPM or BIRDS-EYE view with plane-to-plane homography */
         hmtimer.start();
-        calcAnglesFromVP( vp, theta, gamma );
-        generateHomogMat( H, -theta, -gamma );
-        planeToPlaneHomog( frame, i_frame, H, 400 );
+        cv::Mat H;
+        generateHomogMat(H, -theta.xHat, -gamma.xHat);
+        planeToPlaneHomog(frame, bird_frame, H, 400);
         hmtimer.stop();
-        if ( PRINT_ANGLES ) cout << "ANGLE: " << theta << "," << gamma << endl;
+		/* Printing prints estimates of the angles, not raw */
+        if ( PRINT_ANGLES ) cout << "ANGLE: " << theta.xHat << "," << gamma.xHat<< endl;
 
         //** Calculate homog. intensity feature frame mu and sigma
         float mu, sigma;
-        mean_stddev( i_frame, mu, sigma );
+        mean_stddev( bird_frame, mu, sigma );
         if ( PRINT_STATS )
             std::cout << "MU: " << mu << " SIGMA: " << sigma << std::endl;
 
@@ -220,26 +260,26 @@ int main( int argc, char* argv[] ) {
             cv::Mat mask_frame, ip_frame, il_frame, io_frame, l_frame;
             float ip_mu, ip_sigma, il_mu, il_sigma, io_mu, io_sigma;
 
-            //** Sobel gradient filter on i_frame -> mask_frame
-            cv::Sobel( i_frame, mask_frame, CV_16S, 1, 0 );
+            //** Sobel gradient filter on bird_frame -> mask_frame
+            cv::Sobel( bird_frame, mask_frame, CV_16S, 1, 0 );
             cv::convertScaleAbs( mask_frame, mask_frame );
             cv::threshold( mask_frame, mask_frame, 80, 255, CV_THRESH_BINARY_INV );
 
             //** Dilation (erode because of inver.) of mask_frame -> mask_frame
             cv::erode( mask_frame, mask_frame, cv::Mat(), cv::Point(-1,-1), 4 );
 
-            //** Remove mask_frame from i_frame -> ip_frame
-            i_frame.copyTo( ip_frame, mask_frame );
+            //** Remove mask_frame from bird_frame -> ip_frame
+            bird_frame.copyTo( ip_frame, mask_frame );
 
             //** Calculate ip_mu and ip_sigma of ip_frame pixels values
             mean_stddev( ip_frame, ip_mu, ip_sigma );
 
-            //** Threshold i_frame above ip_mu + ( 3 * ip_sigma ) -> il_frame
-            cv::threshold( i_frame, il_frame, ip_mu + ( 3.0 * ip_sigma ), 255, CV_THRESH_TOZERO );
+            //** Threshold bird_frame above ip_mu + ( 3 * ip_sigma ) -> il_frame
+            cv::threshold( bird_frame, il_frame, ip_mu + ( 3.0 * ip_sigma ), 255, CV_THRESH_TOZERO );
             mean_stddev( il_frame, il_mu, il_sigma );
 
-            //** Threshold i_frame below ip_mu - ( 3 * ip_sigma ) -> io_frame
-            cv::threshold( i_frame, io_frame, ip_mu - ( 3.0 * ip_sigma ), 255, CV_THRESH_TOZERO_INV );
+            //** Threshold bird_frame below ip_mu - ( 3 * ip_sigma ) -> io_frame
+            cv::threshold( bird_frame, io_frame, ip_mu - ( 3.0 * ip_sigma ), 255, CV_THRESH_TOZERO_INV );
             mean_stddev( io_frame, io_mu, io_sigma );
 
             //** Reseed (init) EM
@@ -261,11 +301,11 @@ int main( int argc, char* argv[] ) {
 
         //** Update EM
         etimer.start();
-        bayes_seg.EM_Bayes( i_frame );
+        bayes_seg.EM_Bayes( bird_frame );
         etimer.stop();
 
         //** Create object image
-        bayes_seg.classSeg( i_frame, obj_frame, OBJ );
+        bayes_seg.classSeg( bird_frame, obj_frame, OBJ );
 
         //** Perform opening
         cv::Mat kernel = getStructuringElement(cv::MORPH_RECT, cv::Size(5, 5));
@@ -279,12 +319,13 @@ int main( int argc, char* argv[] ) {
         ptimer.stop();
 
         // Update frame displays
-        win_a.display_frame( i_frame );
+        win_a.display_frame( bird_frame );
         win_b.display_frame( hough_frame );
         win_c.display_frame( obj_frame );
 
         if ( PRINT_TIMES ) {
             // Print timer results
+			utimer.printu();
             ltimer.printu();
             ctimer.printu();
             htimer.printu();
@@ -298,16 +339,24 @@ int main( int argc, char* argv[] ) {
         }
 
         // Check for key presses and allow highgui to process events
+        key = cv::waitKey(1);
         if ( SINGLE_STEP ) {
-            do { key = cv::waitKey( 1 ); } while( key < 0 );
-            if ( key == 27 || key == 'q' ) break;
+            while( key < 0 ) {
+				key = cv::waitKey(1);
+			}
         }
-        else if( ( key = cv::waitKey( 1 ) ) >= 0 ) break;
+	/* Quit if key is ESC or q */
+        if(key == 27 || key == 'q') break;
+        else if(key == 'u') {
+			/* u key switches undistortion on/off. default is on. */
+            undist = (undist + 1) % 2;
+        }
     }
     DMESG( "Done processing frames" );
 
     if ( PRINT_TIMES ) {
         // Print average timer results
+		utimer.aprintu();
         ltimer.aprintu();
         ctimer.aprintu();
         htimer.aprintu();
@@ -320,7 +369,7 @@ int main( int argc, char* argv[] ) {
     }
 
     // Pause if no key was pressed during processing loop
-    if ( !SINGLE_STEP ) while( key < 0 ) key = cv::waitKey( 1 );
+    if ( !SINGLE_STEP ) while( key < 0 ) key = cv::waitKey( 30 );
 
     delete fsrc;
     return 0;
@@ -339,7 +388,7 @@ inline void lane_marker_filter( const cv::Mat &src, cv::Mat &dst ) {
             // Check that we're within kernel size
             if ( ( col >= tau ) && ( col <  (src.cols - tau ) ) &&
                 ( row > ( ( src.rows / 2 ) + LANE_FILTER_ROW_OFFSET ) ) ) {
-                // Filter from Nietos 2010
+                // Filter from Nieto 2010
                 aux = 2 * s[col];
                 aux -= s[col - tau];
                 aux -= s[col + tau];
