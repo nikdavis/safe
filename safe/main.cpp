@@ -42,9 +42,10 @@ cv::Mat distCoeffMat = cv::Mat(5, 1, CV_64F, distCoeffData).clone();
 
 int main( int argc, char* argv[] ) {
     int undist = 1;
-    cvwin win_a( "bird_frame" );
-    cvwin win_b( "hough_frame" );
-    cvwin win_c( "obj_frame" );
+    cvwin win_a( "frame" );
+    cvwin win_b( "bird_frame" );
+    cvwin win_c( "hough_frame" );
+    cvwin win_d( "obj_frame" );
     timer utimer( "Undistort           " );
     timer ltimer( "Lane filter         " );
     timer ctimer( "Canny edge detection" );
@@ -60,7 +61,7 @@ int main( int argc, char* argv[] ) {
     cv::Mat frame_raw, frame, lmf_frame, hough_frame, bird_frame, obj_frame;
     MSAC msac;
     cv::Size image_size;
-	Kalman1D theta(-7.0, 0.005, 0.00005);
+    Kalman1D theta(-7.0, 0.005, 0.00005);
     Kalman1D gamma(1.5, 0.001, 0.00005);		/* Kalman filters for Theta, Gamma */
 	float prev_mu, prev_sigma;
     BayesianSegmentation bayes_seg;
@@ -146,12 +147,9 @@ int main( int argc, char* argv[] ) {
         //** Filter frame for gradient steps up/down horizontally -> lmf_frame
         ltimer.start();
         lane_marker_filter( frame, lmf_frame );
-        cv::normalize( lmf_frame, lmf_frame, 0, 255, cv::NORM_MINMAX, CV_8UC1 );
+        //cv::normalize( lmf_frame, lmf_frame, 0, 255, cv::NORM_MINMAX, CV_8UC1 );
         ltimer.stop();
 
-		/* Debating where to do the Gaussian (before/after LMF */
-        cv::GaussianBlur( frame, frame, cv::Size(3, 3), 0, 0 );
-        cv::GaussianBlur( frame, frame, cv::Size(3, 3), 0, 0 );
         //** Perform Canny edge detection on lmf_frame -> lmf_frame
         ctimer.start();
         // src, dst, low threshold, high threshold, kernel size, accurate
@@ -164,7 +162,7 @@ int main( int argc, char* argv[] ) {
         // src, dst vec, rho, theta, threshold, min length, max gap
         // rho - distance resolution of accumulator in pixels
         // theta - angle resolution of accumulator in pixels
-        cv::HoughLinesP( lmf_frame, hlines, 1, CV_PI / 180.0, 50, 50, 10 );
+        cv::HoughLinesP( lmf_frame, hlines, 3, CV_PI / 60.0, 50, 50, 10 );
         htimer.stop();
 
         // Visualize Hough transform results
@@ -319,9 +317,10 @@ int main( int argc, char* argv[] ) {
         ptimer.stop();
 
         // Update frame displays
-        win_a.display_frame( bird_frame );
-        win_b.display_frame( hough_frame );
-        win_c.display_frame( obj_frame );
+        win_a.display_frame( frame );
+        win_b.display_frame( bird_frame );
+        win_c.display_frame( hough_frame );
+        win_d.display_frame( obj_frame );
 
         if ( PRINT_TIMES ) {
             // Print timer results
