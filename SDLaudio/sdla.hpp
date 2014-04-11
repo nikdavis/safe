@@ -10,13 +10,19 @@ class sdla {
 
         void play_WAV( void );
 
+        void set_interval( int sec, int msec ); // Zero disables timer
+        void set_volume( float vol_left, float vol_right );
+        void set_position( float r, float a );  // Call in place of set_volume
+        void set_position_deg( float r, int a );
+
         bool isvalid( void ) const { return _isvalid; }
 
     private:
         bool _isvalid;
 
-        unsigned char *WAV_buf;
-        unsigned int WAV_len;
+        unsigned char *WAV_buf;         // Original loaded samples
+        unsigned char *mixed_WAV_buf;   // Mixed samples
+        unsigned int WAV_len;           // Buffer size in bytes
 
         unsigned char *cur_pos;
         unsigned int cur_len;
