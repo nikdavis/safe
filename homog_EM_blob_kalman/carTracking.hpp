@@ -10,6 +10,8 @@
 #include <opencv2/calib3d/calib3d.hpp>
 #include "homography.hpp"
 #include "CarSVM.hpp"
+#include "EKF.hpp"
+#include "helpFn.hpp"
 
 using namespace cv;
 using namespace std;
@@ -25,26 +27,20 @@ using namespace std;
 #define	MEAS_NOISE			( 5 )
 #define PROCESS_NOISE		( 10 )
 
+#define EKF_THETA_NOISE		( 1 )
+#define EKF_ACCE_NOISE		( 1 )
+
 // Define for temporal filter
-#define NUM_IN_FRAMES		( 10 )
+#define NUM_IN_FRAMES		( 20 )
 #define NUM_OUT_FRAMES		( 25 )
 #define ERR_BOX_SIZE_PX		( 25 )
 #define MAX_GAP_PX			( 20 )
 #define MIN_BLOB_AREA		( 1500.0f )
 #define MAX_BLOB_AREA		( 50000.0f )
 #define MIN_BOUND_BOX_EREA	( 1200 )
+#define PX_METER_SCALE		((double) 15/330 )
 
-
-
-// Define svm sliding window step
-#define SLIDE_STEP			( 15 )
-#define SVM_IMG_SIZE		( 16 )
-
-// Define macro
-#define DECRE_SAT(x, y)		( x -= (unsigned char)(x > y) )
-#define INCRE_SAT(x, y)		( x += (unsigned char)(x < y) )
-
-
+#define POS_LIST_LENGTH		( 30 )
 
 class CarTracking
 {
@@ -65,48 +61,37 @@ private:
 					match(false),
 					inFrs(0),
 					outFrs(0),
-					lastBox(0),
-					Pos(Point(0, 0)) {}
+					Pos(Point(0, 0)){};
 		bool			inFilter;
 		bool			match;			// 
 		int				inFrs;			// Number of consecutive frame to include in the filter
 		int				outFrs;			// Number of consecutive frame to exclude in the filter		
 		Point			Pos;			// The Position of ObjCand
-		int				lastBox;		
-		KalmanFilter	KFx;
-		KalmanFilter	KFy;
 		Point			filterPos;
+		ExtendedKalmanFilter	EKF;
+		vector<Point>	posList;
+		Vec4f			direction;
 	};
-
-	vector< Point > obj2KF;
-
 	void addNewObjCand(Point newPt);
 
-	void updateInObjCand(int idx, Point Pt);
+	void updateInObjCand(int idx, Point Pt, Mat* img);
 
 	void updateOutObjCand(void);
-
-	int estimateWidth(Mat* img, KeyPoint* kpt, Point* lowestPt);
 
 	bool diffDis(Point pt1, Point pt2);
 
 	double calcDis(Point pt1, Point pt2);
 
-	double similarity(Mat* img, ObjCand* objC, KeyPoint* kpt);
+
 
 	/* ---------------------------------------------------------------------------------
 	*								KALMAN FILTER
 	* --------------------------------------------------------------------------------*/
-
-	void initKalman(int objCandIdx);
+	void initExtendKalman(int objCandIdx);
 
 	/* ---------------------------------------------------------------------------------
 	*								BOUNDING BOXES
 	* --------------------------------------------------------------------------------*/
-	vector< vector< Point > > contours;
-
-	vector< Vec4i > hierarchy;
-
 	vector< vector< Point > > contours_poly;
 
 public:
@@ -128,34 +113,22 @@ public:
 	vector< Point > origKeypoints;
 
 	void detect_filter(Mat* img);
+	
+	void fittingLine(int idx);
+
+	void cvtCoord(Point* orig, Point2d* cvt, Mat* img);
 
 	/* ---------------------------------------------------------------------------------
 	*								BOUNDING BOXES
 	* --------------------------------------------------------------------------------*/
 	vector< Rect > boundRect;
 
+	vector< vector< Point > > contours;
+
+	vector< Vec4i > hierarchy;
+
 	void findBoundContourBox(Mat* img);
-	
-	/* ---------------------------------------------------------------------------------
-	*								KALMAN FILTER
-	* --------------------------------------------------------------------------------*/
-	void updateKF(void);
 
-	/* ---------------------------------------------------------------------------------
-	*								CAR SVM PREDICT
-	* --------------------------------------------------------------------------------*/
-	CarSVM carsvm;
-
-	void boundBox(Mat* img, Point* p, Rect* box, int idx);
-
-	void cropBoundObj(Mat* src, Mat* dst, Mat* invH, Rect* carBox, int objCandIdx);
-
-	bool carSVMpredict(Mat* img, Rect* carBox, double classType, const svm_model *carModel, int objCandIdx);
-
-	/* ---------------------------------------------------------------------------------
-	*								SOBEL
-	* --------------------------------------------------------------------------------*/
-	void doSobel(Mat* img, Mat* dst);
 };
 
 

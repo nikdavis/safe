@@ -8,8 +8,8 @@
 #include "bayesSeg.hpp"
 #include "carTracking.hpp"
 #include "helpFn.hpp"
-#include "CarSVM.hpp"
-#include "svm.hpp"
+#include "EKF.hpp"
+
 
 #define SINGLE_FRAME    ( 0 )
 #define OUTPUT_SOBEL    ( 0 )
@@ -18,6 +18,7 @@
 
 using namespace cv;
 using namespace std;
+RNG rng(12345);
 
 Mat frame, frame1;
 int boxSize[17] = {15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95 };
@@ -42,34 +43,6 @@ double tz;
 double f;
 Point vanishing_point;
 
-/*void redraw(int sobel = 0)
-{
-	float theta = (pitch_int - 90);
-	float gamma = (yaw_int - 90);
-	Mat H, invH;
-	generateHomogMat(H, theta, gamma);
-	planeToPlaneHomog(frame, frame1, H, 400);
-	imshow("Frame1", frame1); //show birds-eye view
-}
-
-
-// Sobel info
-if(sobel) {
-Sobel(frame1, sobelx, frame1.depth(), 1, 0, 5);
-Sobel(frame1, sobely, frame1.depth(), 0, 1, 5);
-mask = sobelx + sobely;
-threshold(mask, mask, 180, 255, THRESH_BINARY);
-erode(mask, mask, Mat());
-dilate(mask, mask, Mat(), Point(-1,-1), 5);
-bitwise_and(frame1, ~mask, frame1);
-}
-
-
-void callback(int, void*)
-{
-	redraw(OUTPUT_SOBEL);
-}*/
-
 
 int main(int argc, char** argv)
 {
@@ -90,26 +63,17 @@ int main(int argc, char** argv)
 	
 	BayesianSegmentation BayesSeg;
 	CarTracking carTrack;
-	CarSVM carsvm;
 	
 	timer frametimer( 	"Frame:				" );
 	timer emtimer( 		"EM:				" );
 	timer homogtimer( 	"Homog:				" );
 	timer morphotimer( 	"Morpho:				" );
 	timer blobtimer( 	"Blob detection:			" );
-	
-	
-	// Load car model for SVM predict
-	const svm_model *carModel = new svm_model[1];
-	carModel = svm_load_model("car.model");
-	cout << "number of class: " << carModel->nr_class << endl;
-	cout << "Kernel type: " << carModel->param.kernel_type << endl;
-	cout << "SVM type: " << svm_get_svm_type(carModel) << endl << endl;
 
 	/*float theta = (pitch_int - 90);
 	float gamma = (yaw_int - 90);*/
-	float theta = ((int)atoi(argv[2]) - 90);
-	float gamma = ((int)atoi(argv[3]) - 90);
+	float theta = (float)(atoi(argv[2]) - 90);
+	float gamma = (float)(atoi(argv[3]) - 90);
 	int iKernelSize = 7;
 	Mat H, invH;
 	Mat frame;
@@ -147,19 +111,14 @@ int main(int argc, char** argv)
 		//generateHomogMat(H, theta, gamma);
 		planeToPlaneHomog(frame, frame, H, 400);		
 		homogtimer.stop();
-		homogtimer.printm();
+		//homogtimer.printm();
 		
 		//Update EM
 		emtimer.start();
 		BayesSeg.EM_Bayes(frame);
         emtimer.stop();
-        emtimer.printm();
+        //emtimer.printm();
 		
-		
-		/*cout <<" 	P  -  L  -  O  -  U" << endl;
-		cout << "Sigma: " << BayesSeg.sigma.sigmaP << " - " << BayesSeg.sigma.sigmaL << " - " << BayesSeg.sigma.sigmaO << " - " << BayesSeg.sigma.sigmaU << endl;
-		cout << "Miu:	" << BayesSeg.miu.miuP << " - " << BayesSeg.miu.miuL << " - " << BayesSeg.miu.miuO << " - " << BayesSeg.miu.miuU << endl;
-		cout << "Omega: " << BayesSeg.omega.omegaP << " - " << BayesSeg.omega.omegaL << " - " << BayesSeg.omega.omegaO << " - " << BayesSeg.omega.omegaU << endl << endl;*/
 		imshow("MyVideo", frame); //show the frame in "MyVideo" window
 		
 
@@ -167,97 +126,63 @@ int main(int argc, char** argv)
 		Mat obj;
 		morphotimer.start();		
 		BayesSeg.classSeg(&frame, &obj, BayesSeg.OBJ);
+		GaussianBlur(obj, obj, Size(15, 15), 10, 10);
+		threshold(obj, obj, 100, 255, CV_THRESH_BINARY);
+		
 		morphotimer.stop();
-		morphotimer.printm();
+		//morphotimer.printm();
+		
+		// blob detection
+		blobtimer.start();
 		
 		// Blob contour bounding box
-		//carTrack.findBoundContourBox(&obj);
+		carTrack.findBoundContourBox(&obj);
+		
+		// rotated rectangle
+		Scalar color = Scalar(rng.uniform(0, 255), rng.uniform(0, 255), rng.uniform(0, 255));
+		Mat dst = obj.clone();
+		cvtColor(dst, dst, CV_GRAY2RGB);
+		for (unsigned int i = 0; i < carTrack.boundRect.size(); i++) {
+			rectangle(dst, carTrack.boundRect[i], Scalar(255, 0, 0), 2, 4, 0);
+		}
 		
 		// Blob detection
-		carTrack.detect_filter(&obj);
-				
-		
-		// Blob detection
-		blobtimer.start();
-		Mat objTmp = obj.clone();
-		cvtColor(objTmp, objTmp, CV_GRAY2RGB);
+		carTrack.detect_filter(&obj);	
+
 		char zBuffer[35];
 		for (unsigned int i = 0; i < carTrack.objCands.size(); i++)
 		{
-			//circle(obj, carTrack.objCands[i].Pt, 3, Scalar(0, 0, 255), -1);
+			circle(dst, carTrack.objCands[i].Pos, 3, Scalar(0, 0, 255), -1);
 			if (carTrack.objCands[i].inFilter)
 			{
-				Mat highProbCarImg;
-				Rect bigbox, smallbox;
 				Point filterPos;
-
-				
-				circle(objTmp, carTrack.objCands[i].Pos, 3, Scalar(255, 0, 0), -1);
-				circle(objTmp, carTrack.objCands[i].filterPos, 3, Scalar(0, 255, 0), -1);
+				circle(dst, carTrack.objCands[i].Pos, 3, Scalar(255, 0, 0), -1);
 				pointHomogToPointOrig(&invH, &carTrack.objCands[i].filterPos, &filterPos);
+				circle(dst, carTrack.objCands[i].filterPos, 2, Scalar(0, 255, 0), -1);
 				circle(orig, filterPos, 2, Scalar(0, 0, 255), -1);
-				carTrack.cropBoundObj(&orig, &highProbCarImg, &invH, &bigbox, i);
-				//imshow("highProbCarImg", highProbCarImg);
-				rectangle(orig, bigbox, Scalar(0, 255, 0), 3);
-				// copy the text to the "zBuffer"
-				//_snprintf_s(zBuffer, 35, "l: %d", cvRound(bigbox.height/1.5));
-
-				//put the text in the "zBuffer" to the "dst" image
-				//putText(orig, zBuffer, bigbox.tl(), CV_FONT_HERSHEY_COMPLEX, 0.8, Scalar(255, 0, 0), 2);
-				if (carTrack.carSVMpredict(&highProbCarImg, &smallbox, carsvm.POS, carModel, i))
-				{
-					//cout << "car detected" << endl;
-					Rect carBox(bigbox.tl().x + smallbox.tl().x, bigbox.tl().y + smallbox.tl().y, smallbox.width, smallbox.height);
-					rectangle(orig, carBox, Scalar(0, 0, 255), 3);
-					/*Mat grayOrig;
-					cvtColor(orig, grayOrig, CV_RGB2GRAY);
-					if (saveBoxImg(&grayOrig, &carBox, "E:\\pos32\\no_car", &fileNum))
-						fileNum++;*/
-
-					continue;
-				}
 			}
 		}
-	 	
+			
 		blobtimer.stop();
-		blobtimer.printm();
+		//blobtimer.printm();
 		
-		//imshow("Obj morphology", obj);
-		imshow("Object", objTmp);
+		imshow("dst", dst);
 		imshow("Original", orig);
 		
 		frametimer.stop();
-		frametimer.printm();
+		//frametimer.printm();
 		cout << endl << endl;
 		if (waitKey(DELAY_MS) == 27) //wait for 'esc' key press for 30ms. If 'esc' key is pressed, break loop
 		{
 			cout << "esc key is pressed by user" << endl;
 			break;
 		}
-		
 	}
 	homogtimer.aprintm();
 	emtimer.aprintm();
 	morphotimer.aprintm();
 	blobtimer.aprintm();
 	frametimer.aprintm();
-	
-	/*Point A(100, 200);
-	cvtColor(frame1, frame1, CV_GRAY2RGB);
-	circle(frame1, A, 3, Scalar(0, 0, 255), -1, 8);
-	imshow("Frame1", frame1);
-	cvtColor(frame1, frame1, CV_RGB2GRAY);
-	
-
-	Mat frame2;
-	planeToPlaneHomog(frame1, frame2, invH, 840);
-	Point B;
-	pointHomogToPointOrig(invH, A, B);
-	cout << "x: " << B.x << " - y: " << B.y << endl;
-	cvtColor(frame1, frame1, CV_GRAY2RGB);
-	circle(frame2, B, 3, Scalar(255, 0, 0), -1, 8);
-	imshow("Frame2", frame2);*/
-
 	
 	waitKey(0);
 	return 1;

@@ -1,6 +1,27 @@
 #include "helpFn.hpp"
 
-void writeCSV(Mat* data, string fileName)
+void writeCSV(Mat* data, string fileName, bool append, string delimiter)
+{
+	Mat tmp;
+	data->convertTo(tmp, CV_32F);
+	ofstream fout;
+	if (append)
+		fout.open(fileName, fstream::app);
+	else
+		fout.open(fileName);
+
+	for (int r = 0; r < tmp.rows; r++)
+	{
+		for (int c = 0; c < tmp.cols; c++)
+		{
+			fout << tmp.at<float>(r, c) << delimiter;
+		}
+		fout << endl;
+	}
+	fout.close();
+}
+
+void writeCSV(Mat* data, string fileName, string delimiter)
 {
 	Mat tmp;
 	data->convertTo(tmp, CV_32F);
@@ -9,10 +30,39 @@ void writeCSV(Mat* data, string fileName)
 	{
 		for (int c = 0; c < tmp.cols; c++)
 		{
-			fout << tmp.at<float>(r, c) << ';';
+			fout << tmp.at<float>(r, c) << delimiter;
 		}
 		fout << endl;
 	}
+	fout.close();
+}
+
+void writeArrayCSV(double* data, int length, string fileName, bool isCol)
+{
+	ofstream fout(fileName);
+	for (int c = 0; c < length; c++)
+	{
+		fout << data[c] << ';';
+		if (isCol)
+			fout << endl;
+	}
+	if (!isCol)
+		fout << endl;
+
+	fout.close();
+}
+
+void writeArrayCSV(double* data, int length, string fileName, string delimeter, bool isCol)
+{
+	ofstream fout(fileName);
+	for (int c = 0; c < length; c++)
+	{
+		fout << data[c] << delimeter;
+		if (isCol)
+			fout << endl;
+	}
+	if (!isCol)
+		fout << endl;
 	fout.close();
 }
 
@@ -93,3 +143,9 @@ void rotateImg(Mat* src, Mat* dst, int* angleDegrees)
 		warpAffine(*src, *dst, rot_mat, src->size());
 	}
 }
+
+//float sin(double angle)
+//{
+//
+//	return 0;
+//}

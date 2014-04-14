@@ -318,18 +318,6 @@ void BayesianSegmentation::classSeg(Mat* img, Mat* obj, int cl)
 	// Normalize the obj image to grayscale
 	normalize(*obj, *obj, 0, 255, NORM_MINMAX);
 	obj->convertTo(*obj, CV_8U);
-
-	//// Apply morphology filter
-	int iKernelSize = 5;
-	Mat kernel = getStructuringElement(MORPH_RECT, Size(iKernelSize, iKernelSize));
-	morphologyEx(*obj, *obj, MORPH_OPEN, kernel);
-	if (cl == OBJ)
-	{
-		Mat dilateKernel = Mat(15, 1, CV_8UC1);
-		dilateKernel.setTo(Scalar(1));
-		dilate(*obj, *obj, dilateKernel);
-		Mat erodeKernel = Mat(1, 7, CV_8UC1);
-		erodeKernel.setTo(Scalar(1));
-		erode(*obj, *obj, erodeKernel, Point(), 2);
-	}
+	cv::Mat kernel = getStructuringElement(cv::MORPH_RECT, cv::Size(5, 5));
+	morphologyEx(*obj, *obj, cv::MORPH_OPEN, kernel);
 }

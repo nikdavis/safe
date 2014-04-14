@@ -1,5 +1,6 @@
 #include "sdla.hpp"
 #include <iostream>
+#include <unistd.h>
 
 int main( int argc, char* argv[] ) {
     sdla audio( "boop.wav" );
@@ -18,7 +19,7 @@ int main( int argc, char* argv[] ) {
 
     for ( float i = 4; i >= 1; i -= 0.05 ) {
         audio.set_position_deg( i, 90 );
-        sleep( 1 );
+	    sleep( 1 );
     }
 
     return 0;
