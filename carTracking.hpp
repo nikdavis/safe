@@ -9,6 +9,7 @@
 #include <opencv2/video/tracking.hpp>
 #include <opencv2/calib3d/calib3d.hpp>
 #include "homography.hpp"
+#include "CarSVM.hpp"
 #include "EKF.hpp"
 #include "helpFn.hpp"
 
@@ -37,7 +38,7 @@ using namespace std;
 #define MIN_BLOB_AREA		( 1500.0f )
 #define MAX_BLOB_AREA		( 50000.0f )
 #define MIN_BOUND_BOX_EREA	( 1200 )
-#define PX_FEET_SCALE		( (float)50/330 )
+#define PX_METER_SCALE		((double) 15/330 )
 
 #define POS_LIST_LENGTH		( 30 )
 
@@ -56,25 +57,25 @@ private:
 	typedef struct ObjCand
 	{
 		// Initialize value for ObjCand
-		ObjCand() : inFilter(false),
+		/*ObjCand() : inFilter(false),
 					match(false),
 					inFrs(0),
 					outFrs(0),
 					Pos(Point(0, 0)), 
 					filterPos(Point(0,0)),
+					meterPos(Point2f(0.0f, 0.0f)),
 					c(0),
-					//d(0),
 					EKF(), 
 					posList(POS_LIST_LENGTH),
-					direction(0.0f, 0.0f, 0.0f, 0.0f) {};
+					direction(0.0f, 0.0f, 0.0f, 0.0f) {};*/
 		bool			inFilter;
 		bool			match;			// 
 		int				inFrs;			// Number of consecutive frame to include in the filter
 		int				outFrs;			// Number of consecutive frame to exclude in the filter		
 		Point			Pos;			// The Position of ObjCand
 		Point			filterPos;	
+		Point2f 		meterPos;	
 		int				c;
-		//int 			d;
 		ExtendedKalmanFilter	EKF;
 		vector<Point>	posList;
 		Vec4f			direction;
@@ -123,9 +124,7 @@ public:
 	
 	void fittingLine(int idx);
 
-	void cvtCoord(Point* orig, Point* cvt, Mat* img);
-	
-	void calAngle(Point* carPos, Mat* img, Point2f* normVxy);
+	void cvtCoord(Point* orig, Point2d* cvt, Mat* img);
 
 	/* ---------------------------------------------------------------------------------
 	*								BOUNDING BOXES

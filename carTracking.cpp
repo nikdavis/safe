@@ -157,7 +157,7 @@ inline void CarTracking::updateInObjCand(int idx, Point Pt, Mat* img)
 		//cout << "-v: " << estimated.at<float>(3) << "-phi: " << estimated.at<float>(4) << "-a: " << estimated.at<float>(5) << endl;
 		
 		fittingLine(idx);
-		//cout << "vx: " << objCands[idx].direction(0) << " - vy: " << objCands[idx].direction(1) << " - x0: " << objCands[idx].direction(2) << " - y0: " << objCands[idx].direction(3) << endl;
+		cout << "vx: " << objCands[idx].direction(0) << " - vy: " << objCands[idx].direction(1) << " - x0: " << objCands[idx].direction(2) << " - y0: " << objCands[idx].direction(3) << endl;
 	}
 	else	// If an object is not appeared long enough.
 	{
@@ -203,7 +203,7 @@ inline void CarTracking::updateOutObjCand(void)
 				objCands[i].filterPos = Point((int)prediction.at<float>(0), (int)prediction.at<float>(1));
 				
 				fittingLine(i);
-				//cout << "vx: " << objCands[i].direction(0) << " - vy: " << objCands[i].direction(1) << " - x0: " << objCands[i].direction(2) << " - y0: " << objCands[i].direction(3) << endl;
+				cout << "vx: " << objCands[i].direction(0) << " - vy: " << objCands[i].direction(1) << " - x0: " << objCands[i].direction(2) << " - y0: " << objCands[i].direction(3) << endl;
 			}
 
 			objCands[i].inFrs -= 1;
@@ -219,53 +219,19 @@ inline void CarTracking::updateOutObjCand(void)
 	}
 }
 
-/*inline void  CarTracking::fittingLine(int idx)
+inline void  CarTracking::fittingLine(int idx)
 {
 	objCands[idx].posList.push_back(objCands[idx].filterPos);
 	if (objCands[idx].posList.size() > POS_LIST_LENGTH)
 		objCands[idx].posList.erase(objCands[idx].posList.begin());
 
 	fitLine(Mat(objCands[idx].posList), objCands[idx].direction, CV_DIST_L2, 0, 0.01, 0.01);
-}*/
-
-
-
-void  CarTracking::fittingLine(int idx)
-{
-	if ((objCands[idx].c % 5) == 0)
-	{
-		Point p(objCands[idx].filterPos.x, objCands[idx].filterPos.y + objCands[idx].c * 2);
-		//objCands[idx].posList.push_back(objCands[idx].filterPos);
-		objCands[idx].posList.push_back(p);
-		if (objCands[idx].posList.size() > POS_LIST_LENGTH)
-			objCands[idx].posList.erase(objCands[idx].posList.begin());
-	}
-	objCands[idx].c++;
-
-	fitLine(Mat(objCands[idx].posList), objCands[idx].direction, CV_DIST_L2, 0, 0.01, 0.01);
 }
 
-void CarTracking::cvtCoord(Point* orig, Point* cvt, Mat* img)
+void CarTracking::cvtCoord(Point* orig, Point2d* cvt, Mat* img)
 {
-	cvt->x = (orig->x - img->cols / 2);
-	cvt->y = (img->rows - orig->y);
-}
-
-void CarTracking::calAngle(Point* carPos, Mat* img, Point2f* normVxy)
-{
-	float Vx = (float)((img->cols / 2) - carPos->x);
-	float Vy = (float)(img->rows - carPos->y);
-
-	if ((Vx == 0) && (Vy == 0))
-	{
-		normVxy->x = 0;
-		normVxy->y = 0;
-	}
-	else
-	{
-		normVxy->x = Vx / sqrt(powf(Vx, 2) + powf(Vy, 2));
-		normVxy->y = Vy / sqrt(powf(Vx, 2) + powf(Vy, 2));
-	}
+	cvt->x = (double)((orig->x - img->cols / 2)*PX_METER_SCALE);
+	cvt->y = (double)((img->rows - orig->y)*PX_METER_SCALE);
 }
 
 /* ---------------------------------------------------------------------------------

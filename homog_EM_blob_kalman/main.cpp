@@ -160,6 +160,41 @@ int main(int argc, char** argv)
 				pointHomogToPointOrig(&invH, &carTrack.objCands[i].filterPos, &filterPos);
 				circle(dst, carTrack.objCands[i].filterPos, 2, Scalar(0, 255, 0), -1);
 				circle(orig, filterPos, 2, Scalar(0, 0, 255), -1);
+				
+				Point2f direction;
+				carTrack.calAngle(&carTrack.objCands[i].filterPos, &obj, &direction);
+
+				/*cout << "Vx: " << direction.x << "-" << carTrack.objCands[i].direction(0) << endl;
+				cout << "Vy: " << direction.y << "-" << carTrack.objCands[i].direction(1) << endl;
+				cout << "angle: " << atan(carTrack.objCands[i].direction(0) / carTrack.objCands[i].direction(1)) << endl;
+				cout << SQUARE_ERROR(direction.x, direction.y, carTrack.objCands[i].direction(0), carTrack.objCands[i].direction(1)) << endl;*/
+
+				Point p1(carTrack.objCands[i].filterPos.x, carTrack.objCands[i].filterPos.y);
+				Point p2(carTrack.objCands[i].filterPos.x + 1000 * carTrack.objCands[i].direction(0),
+						 carTrack.objCands[i].filterPos.y + 1000 * carTrack.objCands[i].direction(1));
+
+				/*cout << p1.x << "-" << p1.y << endl;
+				cout << p2.x << "-" << p2.y << endl;*/
+				line(dst, p1, p2, Scalar(255, 255, 0), 5);
+
+				Point cvtP;
+				carTrack.cvtCoord(&p1, &cvtP, &obj);
+				Point2f feetPos(cvtP.x*PX_FEET_SCALE, cvtP.y*PX_FEET_SCALE);
+
+				//float velocity = carTrack.objCands[i].EKF.statePost.at<float>(3) * PX_FEET_SCALE * SAMPLE_FREQ * (0.682f);
+
+				cout << feetPos.x << "x" << feetPos.y << endl;
+				//cout << "velocity: " << velocity << endl;
+
+
+				float a = 8.0f;
+				float b = 25.0f;
+
+				if ((powf(feetPos.x, 2) / (a*a) + powf(feetPos.y, 2) / (b*b)) < 1)
+				{
+					if (abs(carTrack.objCands[i].direction(0)*direction.x + carTrack.objCands[i].direction(1)*direction.y) > 0.5)
+						cout << "\033[22;31mALARM\e[m" << endl;	
+				}
 			}
 		}
 			
