@@ -107,15 +107,16 @@ int main(int argc, char** argv)
 		
 		// Homography
 		homogtimer.start();
-		genHomogMat(&H, &invH, theta, gamma);
-		//generateHomogMat(H, theta, gamma);
-		planeToPlaneHomog(frame, frame, H, 400);		
+		//genHomogMat(&H, &invH, theta, gamma);
+		generateHomogMat(H, theta, gamma);
+		invH = H.inv();
+		planeToPlaneHomog(frame, frame, H, 360);		
 		homogtimer.stop();
 		//homogtimer.printm();
 		
 		//Update EM
 		emtimer.start();
-		BayesSeg.EM_Bayes(frame);
+		BayesSeg.EM_Bayes( frame );
         emtimer.stop();
         //emtimer.printm();
 		
@@ -125,7 +126,11 @@ int main(int argc, char** argv)
 		// Segmentation class: object
 		Mat obj;
 		morphotimer.start();		
-		BayesSeg.classSeg(&frame, &obj, BayesSeg.OBJ);
+		BayesSeg.classSeg( frame, obj, OBJ );
+		
+		//** Perform opening
+        cv::Mat kernel = getStructuringElement(cv::MORPH_RECT, cv::Size(5, 5));
+        morphologyEx(obj, obj, cv::MORPH_OPEN, kernel);
 		GaussianBlur(obj, obj, Size(15, 15), 10, 10);
 		threshold(obj, obj, 100, 255, CV_THRESH_BINARY);
 		
@@ -139,7 +144,6 @@ int main(int argc, char** argv)
 		carTrack.findBoundContourBox(&obj);
 		
 		// rotated rectangle
-		Scalar color = Scalar(rng.uniform(0, 255), rng.uniform(0, 255), rng.uniform(0, 255));
 		Mat dst = obj.clone();
 		cvtColor(dst, dst, CV_GRAY2RGB);
 		for (unsigned int i = 0; i < carTrack.boundRect.size(); i++) {
@@ -149,7 +153,6 @@ int main(int argc, char** argv)
 		// Blob detection
 		carTrack.detect_filter(&obj);	
 
-		char zBuffer[35];
 		for (unsigned int i = 0; i < carTrack.objCands.size(); i++)
 		{
 			circle(dst, carTrack.objCands[i].Pos, 3, Scalar(0, 0, 255), -1);
@@ -157,9 +160,7 @@ int main(int argc, char** argv)
 			{
 				Point filterPos;
 				circle(dst, carTrack.objCands[i].Pos, 3, Scalar(255, 0, 0), -1);
-				pointHomogToPointOrig(&invH, &carTrack.objCands[i].filterPos, &filterPos);
 				circle(dst, carTrack.objCands[i].filterPos, 2, Scalar(0, 255, 0), -1);
-				circle(orig, filterPos, 2, Scalar(0, 0, 255), -1);
 				
 				Point2f direction;
 				carTrack.calAngle(&carTrack.objCands[i].filterPos, &obj, &direction);
@@ -170,16 +171,14 @@ int main(int argc, char** argv)
 				cout << SQUARE_ERROR(direction.x, direction.y, carTrack.objCands[i].direction(0), carTrack.objCands[i].direction(1)) << endl;*/
 
 				Point p1(carTrack.objCands[i].filterPos.x, carTrack.objCands[i].filterPos.y);
-				Point p2(carTrack.objCands[i].filterPos.x + 1000 * carTrack.objCands[i].direction(0),
-						 carTrack.objCands[i].filterPos.y + 1000 * carTrack.objCands[i].direction(1));
+				Point p2(carTrack.objCands[i].filterPos.x + 1000 * cvRound(carTrack.objCands[i].direction(0)),
+						 carTrack.objCands[i].filterPos.y + 1000 * cvRound(carTrack.objCands[i].direction(1)));
 
-				/*cout << p1.x << "-" << p1.y << endl;
-				cout << p2.x << "-" << p2.y << endl;*/
 				line(dst, p1, p2, Scalar(255, 255, 0), 5);
 
 				Point cvtP;
 				carTrack.cvtCoord(&p1, &cvtP, &obj);
-				Point2f feetPos(cvtP.x*PX_FEET_SCALE, cvtP.y*PX_FEET_SCALE);
+				Point2f feetPos((float)cvtP.x*PX_FEET_SCALE, (float)cvtP.y*PX_FEET_SCALE);
 
 				//float velocity = carTrack.objCands[i].EKF.statePost.at<float>(3) * PX_FEET_SCALE * SAMPLE_FREQ * (0.682f);
 
@@ -188,12 +187,15 @@ int main(int argc, char** argv)
 
 
 				float a = 8.0f;
-				float b = 25.0f;
+				float b = 40.0f;
 
 				if ((powf(feetPos.x, 2) / (a*a) + powf(feetPos.y, 2) / (b*b)) < 1)
 				{
 					if (abs(carTrack.objCands[i].direction(0)*direction.x + carTrack.objCands[i].direction(1)*direction.y) > 0.5)
+					{
 						cout << "\033[22;31mALARM\e[m" << endl;	
+						waitKey(0);
+					}
 				}
 			}
 		}

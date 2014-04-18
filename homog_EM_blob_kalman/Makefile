@@ -38,4 +38,4 @@ EKF.o: EKF.cpp EKF.hpp
 	${CC} ${INCLUDE} ${CFLAGS} -c EKF.cpp
 
 clean:
-	rm -f *.o $(OUTPUT) libsvm.so.$(SHVER)
+	rm -f *.o $(OUTPUT)

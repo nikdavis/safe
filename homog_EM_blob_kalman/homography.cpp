@@ -4,6 +4,7 @@
  *  Created on: Feb 27, 2014
  *      Author: nik
  */
+
 #include "homography.hpp"
 
 
@@ -12,40 +13,53 @@
  * we want a positive Y translation. But Y gets mapped to
  * Z, so we translate positive Z. Or something like that. */
 /* This is "in pixels" which are relative to the image sensor size */
-#define X_TRANSLATION	( 20 )
-#define Y_TRANSLATION	( 20 )
-#define Z_TRANSLATION	( 180 )
-#define CAM_RES_Y		( 480 )
-#define CAM_RES_X		( 640 )
-#define FOCAL_IN_PX		( 550 )
-#define OUTPUT_SIZE_X	( 400 )
-#define OUTPUT_SIZE_Y	( 330 )
+#define X_TRANSLATION	(10)
+#define Y_TRANSLATION	(25)
+#define Z_TRANSLATION	(310)
+#define CAM_RES_Y		(480)
+#define CAM_RES_X		(640)
+#define FOCAL_IN_PX		(378)
+#define OUTPUT_SIZE_X	(416)
+#define OUTPUT_SIZE_Y	(480)
 
 /* NOTE: should really substitute camera calibration matrix in for
  * focal length, and center (CAM_RES_X, CAM_RES_Y). Will do that soon.
  */
 
+static cv::Mat A1 = (cv::Mat_<float>(4,3) <<
+        1,	0,	-OUTPUT_SIZE_X/2,
+        0,	1,	-CAM_RES_Y/2,
+        0,	0,	0,
+        0,	0,	1);
 
+/* Should be from camera calibration */
+static cv::Mat K = (cv::Mat_<float>(3,3) <<
+    FOCAL_IN_PX,	0,				CAM_RES_X/2,
+    0,				FOCAL_IN_PX,	CAM_RES_Y/2,
+    0,				0,				1);
+static cv::Mat Kinv = K.inv();
+
+cv::Mat vpHomog = cv::Mat::zeros( 3, 1, CV_32FC1);
+
+/* Should ditch degrees since everything is in rads */
+void calcAnglesFromVP(cv::Mat &vp, float &theta, float &gamma) {
+	//cout << vp << endl;
+	vpHomog.at<float>(0,0) = vp.at<float>(0,0);
+	vpHomog.at<float>(1,0) = vp.at<float>(1,0);
+	vpHomog.at<float>(2,0) = 1;
+	cv::Mat vpCamCoord = Kinv * vpHomog;
+	//cout << vpCamCoord << endl;
+	theta = atan( vpCamCoord.at<float>(1,0) );
+	gamma = atan( - vpCamCoord.at<float>(0,0) / cos(theta) );
+	/* To degrees */
+	theta = theta * 180.0f / (float)CV_PI;
+	gamma = gamma * 180.0f / (float)CV_PI;
+	//cout << "theta: " << theta << endl;
+	//cout << "gamma: " << gamma << endl;
+}
 
 void planeToPlaneHomog(cv::Mat &in, cv::Mat &out, cv::Mat &H, int outputWidth) {
 	warpPerspective(in, out, H, cv::Size(outputWidth, OUTPUT_SIZE_Y));
-}
-
-/* This function is to remap a point in Homography transformed image
- * to a point of original image */
-void pointHomogToPointOrig(cv::Mat* invH, cv::Point* input, cv::Point* output)
-{
-	/* Convert from point to matrix */
-	cv::Mat posHomog = (cv::Mat_<float>(3, 1) << input->x, input->y, 1);
-
-	/* Convert pos's type to the same type as invH's type for matrix multiplication */
-	posHomog.convertTo(posHomog, invH->type());
-
-	cv::Mat posOrig = *invH*posHomog;
-
-	/* Normalize the position in the original image */
-	output->x = round(posOrig.at<double>(0, 0) / posOrig.at<double>(2, 0));
-	output->y = round(posOrig.at<double>(1, 0) / posOrig.at<double>(2, 0));
 }
 
 
@@ -58,17 +72,17 @@ void generateHomogMat(cv::Mat &H, float theta, float gamma) {
 	theta = theta - 90;		/* Turn camera downward */
 
 	/* Convert to rads */
-	theta = theta * CV_PI / 180.0;
-	beta = beta * CV_PI / 180.0;
+	theta = theta * (float)CV_PI / 180.0f;
+	beta = beta * (float)CV_PI / 180.0f;
 
-    cv::Mat A1 = (cv::Mat_<double>(4,3) <<
+    cv::Mat A1 = (cv::Mat_<float>(4,3) <<
         1, 0, -OUTPUT_SIZE_X/2,
         0, 1, -CAM_RES_Y/2,
         0, 0,    0,
         0, 0,    1);
 
     // Rotation cv::Matrices around the X,Y,Z axis
-    cv::Mat RX = (cv::Mat_<double>(4, 4) <<
+    cv::Mat RX = (cv::Mat_<float>(4, 4) <<
         1,          0,           0, 0,
         0, cos(theta), -sin(theta), 0,
         0, sin(theta),  cos(theta), 0,
@@ -78,14 +92,14 @@ void generateHomogMat(cv::Mat &H, float theta, float gamma) {
      * since X rotation is applied first our original gamma (Y) is then mapped to the Z
      * axis */
 
-    cv::Mat RY = (cv::Mat_<double>(4, 4) <<
+    cv::Mat RY = (cv::Mat_<float>(4, 4) <<
         1, 0, 0, 0,
         0, 1, 0, 0,
         0, 0, 1, 0,
         0, 0, 0, 1);
 
     /* Gamma (y rotation) gets mapped into Beta (z) after x rotation */
-    cv::Mat RZ = (cv::Mat_<double>(4, 4) <<
+    cv::Mat RZ = (cv::Mat_<float>(4, 4) <<
         cos(beta), -sin(beta), 0, 0,
         sin(beta),  cos(beta), 0, 0,
         0,          0,           1, 0,
@@ -95,42 +109,20 @@ void generateHomogMat(cv::Mat &H, float theta, float gamma) {
     cv::Mat R = RX * RY * RZ;
 
     // Translation cv::Matrix on the Z axis change dist will change the height
-    cv::Mat T = (cv::Mat_<double>(4, 4) <<
+    cv::Mat T = (cv::Mat_<float>(4, 4) <<
         1, 0, 0, X_TRANSLATION,
         0, 1, 0, Y_TRANSLATION,
         0, 0, 1, Z_TRANSLATION,
         0, 0, 0, 1);
 
     // Camera Intrisecs cv::Matrix 3D -> 2D
-    cv::Mat A2 = (cv::Mat_<double>(3,4) <<
+    cv::Mat A2 = (cv::Mat_<float>(3,4) <<
         FOCAL_IN_PX,	0,				CAM_RES_X/2,	0,
         0,				FOCAL_IN_PX,	CAM_RES_Y/2,	0,
         0,				0,				1,				0);
-	 
-	cv::Mat invH = (A2 * (T * (R * A1)));
-	H = invH.inv();
+
+    H = A2 * (T * (R * A1));
+    H = H.inv();
     //cout << "theta: " << theta << endl;
     //cout << "gamma: " << gamma << endl;
-}
-
-
-void genHomogMat(cv::Mat* H, cv::Mat* invH, float theta, float gamma) {
-	float beta = gamma;		/* Due to the order of our rotations gamma (Y-axis) gets mapped to beta (Z-axis) */
-	theta = theta - 90;		/* Turn camera downward */
-
-	/* Convert to rads */
-	theta = theta * CV_PI / 180.0;
-	beta = beta * CV_PI / 180.0;
-	
-	double costheta = cos(theta);
-	double sintheta = sin(theta);
-	double cosbeta = cos(beta);
-	double sinbeta = sin(beta);
-
-	*invH = (cv::Mat_<double>(3, 3) <<
-		FOCAL_IN_PX*cosbeta + (CAM_RES_X*sinbeta*sintheta) / 2, (CAM_RES_X*cosbeta*sintheta) / 2 - FOCAL_IN_PX*sinbeta, FOCAL_IN_PX*(X_TRANSLATION - (OUTPUT_SIZE_X*cosbeta) / 2 + (CAM_RES_Y*sinbeta) / 2) - (CAM_RES_X*((CAM_RES_Y*cosbeta*sintheta) / 2 - Z_TRANSLATION + (OUTPUT_SIZE_X*sinbeta*sintheta) / 2)) / 2,
-		FOCAL_IN_PX*costheta*sinbeta + (CAM_RES_Y*sinbeta*sintheta) / 2, FOCAL_IN_PX*cosbeta*costheta + (CAM_RES_Y*cosbeta*sintheta) / 2, -FOCAL_IN_PX*((CAM_RES_Y*cosbeta*costheta) / 2 - Y_TRANSLATION + (OUTPUT_SIZE_X*costheta*sinbeta) / 2) - (CAM_RES_Y*((CAM_RES_Y*cosbeta*sintheta) / 2 - Z_TRANSLATION + (OUTPUT_SIZE_X*sinbeta*sintheta) / 2)) / 2,
-		sinbeta*sintheta, cosbeta*sintheta, Z_TRANSLATION - (CAM_RES_Y*cosbeta*sintheta) / 2 - (OUTPUT_SIZE_X*sinbeta*sintheta) / 2);
-
-	*H = invH->inv();
 }

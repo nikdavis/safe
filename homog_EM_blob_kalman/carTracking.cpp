@@ -210,8 +210,7 @@ inline void CarTracking::updateOutObjCand(void)
 			// If this objCand dose not show up in a long enough time,
 			// erase this objCand in objCands vector and erase the KF
 			// element
-			int numOutFrsIdx = (objCands[i].inFrs > 75) ? 5 : (objCands[i].inFrs / 15);
-			if (++objCands[i].outFrs > numOutFrs[numOutFrsIdx])
+			if (++objCands[i].outFrs > NUM_OUT_FRAMES)
 			{				
 				objCands.erase(objCands.begin() + i);
 			}	
@@ -232,7 +231,7 @@ inline void CarTracking::updateOutObjCand(void)
 
 void  CarTracking::fittingLine(int idx)
 {
-	if ((objCands[idx].c % 5) == 0)
+	if ((objCands[idx].c % 3) == 0)
 	{
 		Point p(objCands[idx].filterPos.x, objCands[idx].filterPos.y + objCands[idx].c * 2);
 		//objCands[idx].posList.push_back(objCands[idx].filterPos);

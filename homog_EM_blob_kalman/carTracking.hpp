@@ -31,15 +31,15 @@ using namespace std;
 
 // Define for temporal filter
 #define NUM_IN_FRAMES		( 20 )
-#define NUM_OUT_FRAMES		( 25 )
+#define NUM_OUT_FRAMES		( 15 )
 #define ERR_BOX_SIZE_PX		( 25 )
 #define MAX_GAP_PX			( 20 )
 #define MIN_BLOB_AREA		( 1500.0f )
 #define MAX_BLOB_AREA		( 50000.0f )
 #define MIN_BOUND_BOX_EREA	( 1200 )
-#define PX_FEET_SCALE		( (float)50/330 )
+#define PX_FEET_SCALE		( 50.0f/330.0f )
 
-#define POS_LIST_LENGTH		( 30 )
+#define POS_LIST_LENGTH		( 10 )
 
 class CarTracking
 {
