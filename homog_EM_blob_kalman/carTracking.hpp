@@ -63,7 +63,7 @@ private:
 					Pos(Point(0, 0)), 
 					filterPos(Point(0,0)),
 					c(0),
-					//d(0),
+					d(0),
 					EKF(), 
 					posList(POS_LIST_LENGTH),
 					direction(0.0f, 0.0f, 0.0f, 0.0f) {};
@@ -74,7 +74,7 @@ private:
 		Point			Pos;			// The Position of ObjCand
 		Point			filterPos;	
 		int				c;
-		//int 			d;
+		int 			d;
 		ExtendedKalmanFilter	EKF;
 		vector<Point>	posList;
 		Vec4f			direction;
