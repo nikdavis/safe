@@ -16,12 +16,19 @@ using namespace std;
 
 #define RAND(out, range)	( out = (int)(rand() % range) )
 
-void writeCSV(Mat data, string fileName);
+void writeCSV(Mat* data, string fileName, bool append = false, string delimiter = ",");
+
+void writeCSV(Mat* data, string fileName, string delimiter);
+
+void writeArrayCSV(double* data, int length, string fileName, bool isCol = true);
+
+void writeArrayCSV(double* data, int length, string fileName, string delimeter, bool isCol = true);
 
 bool saveImg(Mat* img, string fileNameFormat, int* fileNum);
 
 bool saveBoxImg(Mat* img, Rect* box, string fileNameFormat, int* fileNum);
 
 void rotateImg(Mat* src, Mat* dst, int angleDegrees);
+
 
 #endif /* __HELP_FN_HPP__ */
