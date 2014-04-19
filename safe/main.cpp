@@ -238,7 +238,6 @@ int main( int argc, char* argv[] ) {
         /* Generate IPM or BIRDS-EYE view with plane-to-plane homography */
         hmtimer.start();
         cv::Mat H;
-        cout << "theta: " << -theta.xHat << " - gamma: " << -gamma.xHat << endl;
         generateHomogMat(H, -theta.xHat, -gamma.xHat);
         planeToPlaneHomog(frame, bird_frame, H, 400);
         hmtimer.stop();
@@ -253,11 +252,13 @@ int main( int argc, char* argv[] ) {
         meanStdDev( bird_frame, s_mu, s_sigma, mean_stddev_mask);
         mu = s_mu(0);
         sigma = s_sigma(0);
-        //mean_stddev( bird_frame, mu, sigma );
-				
+        
         if ( PRINT_STATS )
             std::cout << "MU: " << mu << " SIGMA: " << sigma << std::endl;
-
+        
+        //mean_stddev( bird_frame, mu, sigma );
+				
+        
         //** If stats significantly different from last frame, reseed EM algor.
         itimer.start();
         if ( ( std::abs( mu    - prev_mu    ) > MU_DELTA    ) || 

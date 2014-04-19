@@ -73,11 +73,15 @@ void BayesianSegmentation::autoInitEM(const Mat &bird_frame)
 	ip_mu = mu(0);
 	ip_sigma = sigma(0);
 
-	cv::threshold(bird_frame, il_frame, ip_mu + ip_sigma, 255, CV_THRESH_TOZERO);
-	cv::threshold(bird_frame, mask_frame, ip_mu + ip_sigma, 255, CV_THRESH_BINARY);
-	meanStdDev(il_frame, mu, sigma, mask_frame);
-	il_mu = mu(0);
-	il_sigma = sigma(0);
+	int thresh = 4;
+	do {
+		cv::threshold(bird_frame, il_frame, thresh * (ip_mu + ip_sigma) / 4, 255, CV_THRESH_TOZERO);
+		cv::threshold(bird_frame, mask_frame, thresh * (ip_mu + ip_sigma) / 4, 255, CV_THRESH_BINARY);
+		meanStdDev(il_frame, mu, sigma, mask_frame);
+		il_mu = mu(0);
+		il_sigma = sigma(0);
+		thresh--;
+	} while (!il_mu);
 
 
 	cv::threshold(bird_frame, io_frame, ip_mu - ip_sigma, 255, CV_THRESH_TOZERO_INV);
@@ -89,7 +93,11 @@ void BayesianSegmentation::autoInitEM(const Mat &bird_frame)
 	if (io_mu == 0)
 	{
 		io_mu = 15;
-		io_sigma = 20;
+	}
+	
+	if (io_sigma == 0)
+	{
+		io_sigma = 10;
 	}
 
 	//** Reseed (init) EM
@@ -100,9 +108,9 @@ void BayesianSegmentation::autoInitEM(const Mat &bird_frame)
 	probPLOUInit(0.45, 0.10, 0.40, 0.5);
 	calcProb();
 
-	/*cout << ip_mu << " - " << ip_sigma << endl;
-	cout << il_mu << " - " << il_sigma << endl;
-	cout << io_mu << " - " << io_sigma << endl;
+	/*std::cout << ip_mu << " - " << ip_sigma << std::endl;
+	std::cout << il_mu << " - " << il_sigma << std::endl;
+	std::cout << io_mu << " - " << io_sigma << std::endl;
 
 	imshow("mask", mask_frame);
 	imshow("object", io_frame);
@@ -307,6 +315,17 @@ void BayesianSegmentation::EM_Bayes( const Mat &img )
     probPLOU_X.probL_X.at<float>(0) = 0;
     probPLOU_X.probO_X.at<float>(0) = 0;
     probPLOU_X.probU_X.at<float>(0) = 0;
+    
+    //std::cout << "EM update: " << miu.O << " - " << sigma.O << std::endl;
+    
+    // If the miu of object gets too small, assign it to a fixed value.
+    if (miu.O < 1.0f)
+    {
+    	miu.O = 3.0f;
+    	sigma.O = 5.0f;
+    }
+    	
+    //std::cout << "EM update: " << miu.O << " - " << sigma.O << std::endl;
 }
 
 void BayesianSegmentation::sigmaInit( double sigmaP, double sigmaL, double sigmaO, double sigmaU )
