@@ -13,7 +13,8 @@
  * we want a positive Y translation. But Y gets mapped to
  * Z, so we translate positive Z. Or something like that. */
 /* This is "in pixels" which are relative to the image sensor size */
-#define Z_TRANSLATION	(309)
+#define Y_TRANSLATION	(20)
+#define Z_TRANSLATION	(270)
 #define CAM_RES_Y		(480)
 #define CAM_RES_X		(640)
 #define FOCAL_IN_PX		(378)
@@ -109,7 +110,7 @@ void generateHomogMat(cv::Mat &H, float theta, float gamma) {
     // Translation cv::Matrix on the Z axis change dist will change the height
     cv::Mat T = (cv::Mat_<float>(4, 4) <<
         1, 0, 0, 0,
-        0, 1, 0, 0,
+        0, 1, 0, Y_TRANSLATION,
         0, 0, 1, Z_TRANSLATION,
         0, 0, 0, 1);
 

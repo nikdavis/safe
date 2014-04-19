@@ -8,5 +8,5 @@ function timestamp() {
 
 for ((;;)) do
 	echo STARTING TO CAPTURE ${SECONDS_TO_CAP} SECOND\(S\)
-	../main capture${SECONDS_TO_CAP}_`eval timestamp`.avi ${SECONDS_TO_CAP}
+	./main capture${SECONDS_TO_CAP}_`eval timestamp`.avi ${SECONDS_TO_CAP}
 done 

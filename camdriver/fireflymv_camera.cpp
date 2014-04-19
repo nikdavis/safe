@@ -22,7 +22,7 @@ FireflyMVCamera::FireflyMVCamera() {
     integError = 0;
     derivError = 0;
     dt = 1.0 / 30.0;
-    Ku = 0.14;
+    Ku = 0.25;
     Pu = 0.45;
     Kp = 0.45 * Ku;
     Ki = 1.7 * Kp / Pu;
@@ -90,7 +90,7 @@ FireflyMVCamera::FireflyMVCamera() {
         printf( "Error in fc2CreateImage: %d\n", error );
         initialized = -1;
     }
-
+#if 0
     if(initialized == 1) {
         /* Setup registers for our manual PID shutter control */
         error = fc2WriteRegister(context, 0x81C, 0x820000A8);     // Set shutter value
@@ -102,6 +102,7 @@ FireflyMVCamera::FireflyMVCamera() {
             initialized = -1;
         }
     }
+#endif
 }
 
 
@@ -154,7 +155,7 @@ int FireflyMVCamera::grabFrame(cv::Mat &retFrame) {
     else {
         cv::Mat rawImage(480, 640, CV_8UC1, image.pData, 0);
         retFrame = rawImage.clone();
-        if(statePID == 1) processPID(retFrame);
+  //      if(statePID == 1) processPID(retFrame);
         frames++;
         return 0;
     }

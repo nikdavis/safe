@@ -17,7 +17,7 @@
 
 #define PRINT_TIMES             true
 #define PRINT_VP                false
-#define PRINT_ANGLES            false
+#define PRINT_ANGLES            true
 #define PRINT_STATS             true
 
 inline void lane_marker_filter( const cv::Mat &src, cv::Mat &dst );
@@ -162,7 +162,7 @@ int main( int argc, char* argv[] ) {
         // src, dst vec, rho, theta, threshold, min length, max gap
         // rho - distance resolution of accumulator in pixels
         // theta - angle resolution of accumulator in pixels
-        cv::HoughLinesP( lmf_frame, hlines, 3, CV_PI / 60.0, 50, 50, 10 );
+        cv::HoughLinesP( lmf_frame, hlines, 3, CV_PI / 60.0, 40, 40, 10 );
         htimer.stop();
 
         // Visualize Hough transform results
