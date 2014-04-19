@@ -40,6 +40,7 @@ public:
 
     void calcProb( void );
     void EM_Bayes( const cv::Mat &img );
+    void autoInitEM(const cv::Mat &bird_frame);
     void sigmaInit( double sigmaP, double sigmaL, double sigmaO, double sigmaU );
     void miuInit( double miuP, double miuL, double miuO, double miuU );
     void probPLOUInit( double probP, double probL, double probO, double probU );

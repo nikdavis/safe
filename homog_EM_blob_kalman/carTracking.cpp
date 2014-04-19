@@ -227,19 +227,17 @@ inline void CarTracking::updateOutObjCand(void)
 	fitLine(Mat(objCands[idx].posList), objCands[idx].direction, CV_DIST_L2, 0, 0.01, 0.01);
 }*/
 
-
-
 void  CarTracking::fittingLine(int idx)
 {
-	if ((objCands[idx].c % 3) == 0)
-	{
-		Point p(objCands[idx].filterPos.x, objCands[idx].filterPos.y + objCands[idx].c * 2);
+	objCands[idx].d++;
+	if ((objCands[idx].d % 3) == 0)
+	{	
+		Point p(objCands[idx].filterPos.x, objCands[idx].filterPos.y + objCands[idx].d * 2);
 		//objCands[idx].posList.push_back(objCands[idx].filterPos);
 		objCands[idx].posList.push_back(p);
 		if (objCands[idx].posList.size() > POS_LIST_LENGTH)
 			objCands[idx].posList.erase(objCands[idx].posList.begin());
 	}
-	objCands[idx].c++;
 
 	fitLine(Mat(objCands[idx].posList), objCands[idx].direction, CV_DIST_L2, 0, 0.01, 0.01);
 }

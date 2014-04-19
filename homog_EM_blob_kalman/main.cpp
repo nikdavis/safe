@@ -48,14 +48,14 @@ int main(int argc, char** argv)
 {
 	if (argc < 4)
 	{
-		cout << "Usage: main video theta(degree) gamma(degree)" << endl;
+		cout << "Usage: main theta(degree) gamma(degree) video" << endl;
 		return -1;
 	}
 	//VideoCapture cap("E:/OpenCV Images/sample2.avi");	// open the video file for reading
-	cout << argv[1] << endl;
-	VideoCapture cap(argv[1]);	// open the video file for reading
-
-	if (!cap.isOpened())				// if not success, exit program
+	cout << argv[3] << endl;
+	VideoCapture cap(argv[3]);	// open the video file for reading
+	cap.set(CV_CAP_PROP_POS_MSEC, 5000); 	//start the video at 300ms
+	if (!cap.isOpened())					// if not success, exit program
 	{
 		cout << "Cannot open the video file" << endl;
 		return -1;
@@ -72,8 +72,8 @@ int main(int argc, char** argv)
 
 	/*float theta = (pitch_int - 90);
 	float gamma = (yaw_int - 90);*/
-	float theta = (float)(atoi(argv[2]) - 90);
-	float gamma = (float)(atoi(argv[3]) - 90);
+	float theta = (float)(atoi(argv[1]) - 90);
+	float gamma = (float)(atoi(argv[2]) - 90);
 	int iKernelSize = 7;
 	Mat H, invH;
 	Mat frame;
@@ -82,7 +82,7 @@ int main(int argc, char** argv)
 	kernel1.setTo(Scalar(1));
 	
 	BayesSeg.sigmaInit(20, 20, 20, UNDEF_DEFAULT_SIGMA);
-	BayesSeg.miuInit(120, 200, 40, UNDEF_DEFAULT_MIU);
+	BayesSeg.miuInit(60, 100, 5, UNDEF_DEFAULT_MIU);
 	BayesSeg.probPLOUInit(0.25, 0.25, 0.25, 0.25);
 
 	BayesSeg.calcProb();
@@ -103,12 +103,14 @@ int main(int argc, char** argv)
 		else if (frame.channels() == 4)
 			cvtColor(frame, frame, CV_RGBA2GRAY);
 			
-		equalizeHist(frame, frame);
+		//equalizeHist(frame, frame);
+		
+		//imshow("hist", frame);
 		
 		// Homography
 		homogtimer.start();
 		//genHomogMat(&H, &invH, theta, gamma);
-		generateHomogMat(H, theta, gamma);
+		generateHomogMat(H, (-0.465694f), (-22.6466f));
 		invH = H.inv();
 		planeToPlaneHomog(frame, frame, H, 360);		
 		homogtimer.stop();
@@ -143,6 +145,27 @@ int main(int argc, char** argv)
 		// Blob contour bounding box
 		carTrack.findBoundContourBox(&obj);
 		
+		/*for (unsigned int i = 0; i < carTrack.boundRect.size(); i++)
+		{
+			if ((carTrack.boundRect.at(i).br().y - carTrack.boundRect.at(i).tl().y) > 5 * obj.rows / 6)
+			{
+				if ((carTrack.boundRect.at(i).br().x + carTrack.boundRect.at(i).tl().x)/2 < obj.cols / 2)
+				{
+					Point p1(obj.cols / 3, 0);
+					Point p2(obj.cols, obj.rows);
+					obj = obj(Rect(p1, p2 ));
+				}
+				if ((carTrack.boundRect.at(i).br().x + carTrack.boundRect.at(i).tl().x) / 2 > obj.cols / 2)
+				{
+					Point p1(0, 0);
+					Point p2(obj.cols - obj.cols / 3, obj.rows);
+					obj = obj(Rect(p1, p2));
+				}
+			}
+		}
+		
+		carTrack.findBoundContourBox(&obj);*/
+		
 		// rotated rectangle
 		Mat dst = obj.clone();
 		cvtColor(dst, dst, CV_GRAY2RGB);
@@ -171,8 +194,8 @@ int main(int argc, char** argv)
 				cout << SQUARE_ERROR(direction.x, direction.y, carTrack.objCands[i].direction(0), carTrack.objCands[i].direction(1)) << endl;*/
 
 				Point p1(carTrack.objCands[i].filterPos.x, carTrack.objCands[i].filterPos.y);
-				Point p2(carTrack.objCands[i].filterPos.x + 1000 * cvRound(carTrack.objCands[i].direction(0)),
-						 carTrack.objCands[i].filterPos.y + 1000 * cvRound(carTrack.objCands[i].direction(1)));
+				Point p2(carTrack.objCands[i].filterPos.x + cvRound(1000 * carTrack.objCands[i].direction(0)),
+						 carTrack.objCands[i].filterPos.y + cvRound(1000 * carTrack.objCands[i].direction(1)));
 
 				line(dst, p1, p2, Scalar(255, 255, 0), 5);
 
@@ -194,7 +217,7 @@ int main(int argc, char** argv)
 					if (abs(carTrack.objCands[i].direction(0)*direction.x + carTrack.objCands[i].direction(1)*direction.y) > 0.5)
 					{
 						cout << "\033[22;31mALARM\e[m" << endl;	
-						waitKey(0);
+						//waitKey(0);
 					}
 				}
 			}

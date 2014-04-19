@@ -48,6 +48,67 @@ void BayesianSegmentation::calcHistogram( const Mat &img )
     N -= cvRound( before * 0.9 );
 }
 
+void BayesianSegmentation::autoInitEM(const Mat &bird_frame)
+{
+	cv::Mat x_mask_frame, y_mask_frame, mask_frame, ip_frame, il_frame, io_frame, l_frame;
+	float ip_mu, ip_sigma, il_mu, il_sigma, io_mu, io_sigma;
+	Scalar mu, sigma;
+
+	//** Sobel gradient filter on bird_frame -> mask_frame
+	cv::Sobel(bird_frame, x_mask_frame, CV_16S, 1, 0);
+	cv::convertScaleAbs(x_mask_frame, x_mask_frame);
+	//cv::Sobel(bird_frame, y_mask_frame, CV_16S, 0, 1);
+	//cv::convertScaleAbs(y_mask_frame, y_mask_frame);
+	//addWeighted(x_mask_frame, 0.5, y_mask_frame, 0.5, 0, mask_frame);
+	cv::threshold(x_mask_frame, mask_frame, 80, 255, CV_THRESH_BINARY_INV);
+
+	//** Dilation (erode because of inver.) of mask_frame -> mask_frame
+	cv::erode(mask_frame, mask_frame, cv::Mat(), cv::Point(-1, -1), 4);
+
+	//** Remove mask_frame from bird_frame -> ip_frame
+	bird_frame.copyTo(ip_frame, mask_frame);
+
+	//** Calculate ip_mu and ip_sigma of ip_frame pixels values
+	meanStdDev(ip_frame, mu, sigma, mask_frame);
+	ip_mu = mu(0);
+	ip_sigma = sigma(0);
+
+	cv::threshold(bird_frame, il_frame, ip_mu + ip_sigma, 255, CV_THRESH_TOZERO);
+	cv::threshold(bird_frame, mask_frame, ip_mu + ip_sigma, 255, CV_THRESH_BINARY);
+	meanStdDev(il_frame, mu, sigma, mask_frame);
+	il_mu = mu(0);
+	il_sigma = sigma(0);
+
+
+	cv::threshold(bird_frame, io_frame, ip_mu - ip_sigma, 255, CV_THRESH_TOZERO_INV);
+	cv::threshold(io_frame, mask_frame, 1, 255, CV_THRESH_BINARY);
+	meanStdDev(io_frame, mu, sigma, mask_frame);
+	io_mu = mu(0);
+	io_sigma = sigma(0);
+
+	if (io_mu == 0)
+	{
+		io_mu = 15;
+		io_sigma = 20;
+	}
+
+	//** Reseed (init) EM
+	//sigmaInit(10, 10, 10, UNDEF_DEFAULT_SIGMA);
+	//miuInit(100, 210, 30, UNDEF_DEFAULT_MIU);
+	sigmaInit( ip_sigma, il_sigma, io_sigma, UNDEF_DEFAULT_SIGMA );
+	miuInit( ip_mu, il_mu, io_mu, UNDEF_DEFAULT_MIU );
+	probPLOUInit(0.45, 0.10, 0.40, 0.5);
+	calcProb();
+
+	/*cout << ip_mu << " - " << ip_sigma << endl;
+	cout << il_mu << " - " << il_sigma << endl;
+	cout << io_mu << " - " << io_sigma << endl;
+
+	imshow("mask", mask_frame);
+	imshow("object", io_frame);
+	waitKey(0);*/
+}
+
 void* BayesianSegmentation::calcProbThread( void* arg )
 {
     PassArg* args = (static_cast<PassArg*>(arg));

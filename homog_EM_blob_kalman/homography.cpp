@@ -13,9 +13,8 @@
  * we want a positive Y translation. But Y gets mapped to
  * Z, so we translate positive Z. Or something like that. */
 /* This is "in pixels" which are relative to the image sensor size */
-#define X_TRANSLATION	(10)
-#define Y_TRANSLATION	(25)
-#define Z_TRANSLATION	(310)
+#define Y_TRANSLATION	(40)
+#define Z_TRANSLATION	(270)
 #define CAM_RES_Y		(480)
 #define CAM_RES_X		(640)
 #define FOCAL_IN_PX		(378)
@@ -69,7 +68,7 @@ void planeToPlaneHomog(cv::Mat &in, cv::Mat &out, cv::Mat &H, int outputWidth) {
  * the new image size desired. */
 void generateHomogMat(cv::Mat &H, float theta, float gamma) {
 	float beta = gamma;		/* Due to the order of our rotations gamma (Y-axis) gets mapped to beta (Z-axis) */
-	theta = theta - 90;		/* Turn camera downward */
+	theta = theta - 90.0f;		/* Turn camera downward */
 
 	/* Convert to rads */
 	theta = theta * (float)CV_PI / 180.0f;
@@ -110,7 +109,7 @@ void generateHomogMat(cv::Mat &H, float theta, float gamma) {
 
     // Translation cv::Matrix on the Z axis change dist will change the height
     cv::Mat T = (cv::Mat_<float>(4, 4) <<
-        1, 0, 0, X_TRANSLATION,
+        1, 0, 0, 0,
         0, 1, 0, Y_TRANSLATION,
         0, 0, 1, Z_TRANSLATION,
         0, 0, 0, 1);
