@@ -13,7 +13,7 @@
 #include <cmath>
 
 // Pause after processing each frame
-#define SINGLE_STEP             true
+#define SINGLE_STEP             false
 
 #define PRINT_TIMES             true
 #define PRINT_VP                false
@@ -245,63 +245,16 @@ int main( int argc, char* argv[] ) {
         if ( PRINT_ANGLES ) cout << "ANGLE: " << theta.xHat << "," << gamma.xHat<< endl;
 
         //** Calculate homog. intensity feature frame mu and sigma
-        float mu, sigma;
-        cv::Scalar s_mu, s_sigma;
-        cv::Mat mean_stddev_mask;
-        cv::threshold( bird_frame, mean_stddev_mask, 1, 255, CV_THRESH_BINARY);
-        meanStdDev( bird_frame, s_mu, s_sigma, mean_stddev_mask);
-        mu = s_mu(0);
-        sigma = s_sigma(0);
-        
+        float mu, sigma;        
+        bayes_seg.mean_stddev( bird_frame, mu, sigma );
         if ( PRINT_STATS )
             std::cout << "MU: " << mu << " SIGMA: " << sigma << std::endl;
-        
-        //mean_stddev( bird_frame, mu, sigma );
-				
         
         //** If stats significantly different from last frame, reseed EM algor.
         itimer.start();
         if ( ( std::abs( mu    - prev_mu    ) > MU_DELTA    ) || 
              ( std::abs( sigma - prev_sigma ) > SIGMA_DELTA ) ) {
             DMESG( "Significant stat. deltas, reseeding EM algorithm" );
-            /*cv::Mat mask_frame, ip_frame, il_frame, io_frame, l_frame;
-            float ip_mu, ip_sigma, il_mu, il_sigma, io_mu, io_sigma;
-
-            // Sobel gradient filter on bird_frame -> mask_frame
-            cv::Sobel( bird_frame, mask_frame, CV_16S, 1, 0 );
-            cv::convertScaleAbs( mask_frame, mask_frame );
-            cv::threshold( mask_frame, mask_frame, 80, 255, CV_THRESH_BINARY_INV );
-
-            // Dilation (erode because of inver.) of mask_frame -> mask_frame
-            cv::erode( mask_frame, mask_frame, cv::Mat(), cv::Point(-1,-1), 4 );
-
-            // Remove mask_frame from bird_frame -> ip_frame
-            bird_frame.copyTo( ip_frame, mask_frame );
-
-            // Calculate ip_mu and ip_sigma of ip_frame pixels values
-            mean_stddev( ip_frame, ip_mu, ip_sigma );
-
-            // Threshold bird_frame above ip_mu + ( 3 * ip_sigma ) -> il_frame
-            cv::threshold( bird_frame, il_frame, ip_mu + ( 1.0 * ip_sigma ), 255, CV_THRESH_TOZERO );
-            mean_stddev( il_frame, il_mu, il_sigma );
-
-            // Threshold bird_frame below ip_mu - ( 3 * ip_sigma ) -> io_frame
-            cv::threshold( bird_frame, io_frame, ip_mu - ( 1.0 * ip_sigma ), 255, CV_THRESH_TOZERO_INV );
-            mean_stddev( io_frame, io_mu, io_sigma );
-
-            // Reseed (init) EM
-            //bayes_seg.sigmaInit( 10, 10, 10, UNDEF_DEFAULT_SIGMA );
-			//bayes_seg.miuInit( 100, 210, 30, UNDEF_DEFAULT_MIU );
-            bayes_seg.sigmaInit( ip_sigma, il_sigma, io_sigma, UNDEF_DEFAULT_SIGMA );
-			bayes_seg.miuInit( ip_mu, il_mu, io_mu, UNDEF_DEFAULT_MIU );
-			bayes_seg.probPLOUInit( 0.45, 0.10, 0.40, 0.5 );
-			bayes_seg.calcProb();
-
-            if ( PRINT_STATS )
-                std::cout << "IP_MU: " << ip_mu << " IP_SIGMA: " << ip_sigma << std::endl;
-                std::cout << "IL_MU: " << il_mu << " IL_SIGMA: " << il_sigma << std::endl;
-                std::cout << "IO_MU: " << io_mu << " IO_SIGMA: " << io_sigma << std::endl;*/
-            
             bayes_seg.autoInitEM( bird_frame );
         }
         prev_mu = mu;
@@ -459,7 +412,8 @@ void mean_stddev( const cv::Mat &src, float &mean, float &stddev ) {
         return;
     }
     mean = accum / ( float ) size;
-    for ( int i = 1, accum = 0; i < 256; ++i ) {
+    accum = 0;
+    for ( int i = 1; i < 256; ++i ) {
         float delta = ( float ) i - mean;
         accum += ( float ) hist[i] * ( delta * delta );
     }

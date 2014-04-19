@@ -48,11 +48,35 @@ void BayesianSegmentation::calcHistogram( const Mat &img )
     N -= cvRound( before * 0.9 );
 }
 
+// Assumes unsigned byte (uchar) elements, doesn't count zero elements
+void BayesianSegmentation::mean_stddev( const cv::Mat &src, float &mean, float &stddev ) {
+    int hist[256] = {0};
+    int accum = 0;
+    int size = src.rows * src.cols; // Number of elements
+    uchar *pelements = src.data;
+    for ( uchar *endp = pelements + size; pelements < endp; ++pelements ) {
+        ++hist[*pelements];
+        if ( *pelements == 0 ) --size;
+        else accum += *pelements;
+    }
+    if ( size == 0 ) { // If image was empty, zero params and return
+        mean = 0;
+        stddev = 0;
+        return;
+    }
+    mean = accum / ( float ) size;
+    accum = 0;
+    for ( int i = 1; i < 256; ++i ) {
+        float delta = ( float ) i - mean;
+        accum += ( float ) hist[i] * ( delta * delta );
+    }
+    stddev = std::sqrt( accum / ( float ) size );
+}
+
 void BayesianSegmentation::autoInitEM(const Mat &bird_frame)
 {
 	cv::Mat x_mask_frame, y_mask_frame, mask_frame, ip_frame, il_frame, io_frame, l_frame;
 	float ip_mu, ip_sigma, il_mu, il_sigma, io_mu, io_sigma;
-	Scalar mu, sigma;
 
 	//** Sobel gradient filter on bird_frame -> mask_frame
 	cv::Sobel(bird_frame, x_mask_frame, CV_16S, 1, 0);
@@ -69,26 +93,18 @@ void BayesianSegmentation::autoInitEM(const Mat &bird_frame)
 	bird_frame.copyTo(ip_frame, mask_frame);
 
 	//** Calculate ip_mu and ip_sigma of ip_frame pixels values
-	meanStdDev(ip_frame, mu, sigma, mask_frame);
-	ip_mu = mu(0);
-	ip_sigma = sigma(0);
+	mean_stddev(ip_frame, ip_mu, ip_sigma);
 
 	int thresh = 4;
 	do {
 		cv::threshold(bird_frame, il_frame, thresh * (ip_mu + ip_sigma) / 4, 255, CV_THRESH_TOZERO);
-		cv::threshold(bird_frame, mask_frame, thresh * (ip_mu + ip_sigma) / 4, 255, CV_THRESH_BINARY);
-		meanStdDev(il_frame, mu, sigma, mask_frame);
-		il_mu = mu(0);
-		il_sigma = sigma(0);
+		mean_stddev(il_frame, il_mu, il_sigma);
 		thresh--;
 	} while (!il_mu);
 
 
 	cv::threshold(bird_frame, io_frame, ip_mu - ip_sigma, 255, CV_THRESH_TOZERO_INV);
-	cv::threshold(io_frame, mask_frame, 1, 255, CV_THRESH_BINARY);
-	meanStdDev(io_frame, mu, sigma, mask_frame);
-	io_mu = mu(0);
-	io_sigma = sigma(0);
+	mean_stddev(io_frame, io_mu, io_sigma);
 
 	if (io_mu == 0)
 	{
