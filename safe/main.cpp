@@ -222,7 +222,7 @@ int main( int argc, char* argv[] ) {
             } else {
             	theta.skipMeas();
             }
-            if(gammaDelta < 20.0) {
+            if(gammaDelta < 25.0) {
             	gamma.addMeas(gammaAng);
             } else {
             	gamma.skipMeas();
