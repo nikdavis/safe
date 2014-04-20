@@ -104,12 +104,12 @@ void CarTracking::detect_filter(const Mat &img)
  * an object candidate. It returns TRUE if the center point is within a certain
  * box of object candidate center point.
  */
-inline bool CarTracking::diffDis(Point pt1, Point pt2)
+inline bool CarTracking::diffDis(Point2f pt1, Point2f pt2)
 {
-	return (abs((int)pt1.x - (int)pt2.x) < ERR_BOX_SIZE_PX) ? ((abs((int)pt1.y - (int)pt2.y) < ERR_BOX_SIZE_PX) ? true : false) : false;
+	return (fabs(pt1.x - pt2.x) < ERR_BOX_SIZE_PX) ? ((fabs( pt1.y - pt2.y) < ERR_BOX_SIZE_PX) ? true : false) : false;
 }
 
-inline double CarTracking::calcDis(Point pt1, Point pt2)
+inline double CarTracking::calcDis(Point2f pt1, Point2f pt2)
 {
 	return sqrt(pow((double)pt1.x - (double)pt2.x, 2) + pow((double)pt1.y - (double)pt2.y, 2));
 }
@@ -118,11 +118,12 @@ inline double CarTracking::calcDis(Point pt1, Point pt2)
  * The new blob detected will be push back in the object candidate vector 'objCands'
  * to pass through temporal filter.
  */
-inline void CarTracking::addNewObjCand(Point newPt)
+inline void CarTracking::addNewObjCand(Point2f newPt)
 {
 	ObjCand newObjCand;
 	newObjCand.inFrs = 1;
 	newObjCand.Pos = newPt;
+    newObjCand.filterPos = newPt;
 	newObjCand.match = true;
 
 	// Push newObjCand into the vector
@@ -133,7 +134,7 @@ inline void CarTracking::addNewObjCand(Point newPt)
  * object candidate. An object candidate will be passed to next execution 
  * step only when it appears long enough in the continue sequence of frames.
  */
-inline void CarTracking::updateInObjCand(int idx, Point Pt)
+inline void CarTracking::updateInObjCand(int idx, Point2f Pt)
 {
 	objCands[idx].Pos = Pt;
 	objCands[idx].match = true;
@@ -146,6 +147,7 @@ inline void CarTracking::updateInObjCand(int idx, Point Pt)
 	{
 		// Predict the next position
 		objCands[idx].EKF.predict();
+        objCands[idx].veloKF.predict();
 
 		// Update the new measurement values
 		Mat_<float> measurement(2, 1);
@@ -157,10 +159,17 @@ inline void CarTracking::updateInObjCand(int idx, Point Pt)
 		estimated = objCands[idx].EKF.correct(measurement);
 
 		// Convert position from Mat format to Point format
-		objCands[idx].filterPos = Point((int)estimated.at<float>(0), (int)estimated.at<float>(1));
+		objCands[idx].prev_filterPos = objCands[idx].filterPos;
+		objCands[idx].filterPos = Point2f(measurement.at<float>(0), measurement.at<float>(1));
 		//cout << "x: " << estimated.at<float>(0) << "-y: " << estimated.at<float>(1) << "-theta: " << estimated.at<float>(2);
 		//cout << "-v: " << estimated.at<float>(3) << "-phi: " << estimated.at<float>(4) << "-a: " << estimated.at<float>(5) << endl;
-		
+
+        Point posdelta = objCands[idx].filterPos - objCands[idx].prev_filterPos;
+        measurement(0) = posdelta.x;
+        measurement(1) = posdelta.y;
+        estimated = objCands[idx].veloKF.correct(measurement);
+		objCands[idx].filterVelo = Point2f(estimated.at<float>(0), estimated.at<float>(1));
+
 		fittingLine(idx);
 		//cout << "vx: " << objCands[idx].direction(0) << " - vy: " << objCands[idx].direction(1) << " - x0: " << objCands[idx].direction(2) << " - y0: " << objCands[idx].direction(3) << endl;
 	}
@@ -177,6 +186,7 @@ inline void CarTracking::updateInObjCand(int idx, Point Pt)
 			objCands[idx].inFilter = true;
 
 			initExtendKalman(idx);
+            initVeloKF(idx);
 		}
 	}
 }
@@ -205,7 +215,7 @@ inline void CarTracking::updateOutObjCand(void)
 				prediction = objCands[i].EKF.predict();
 
 				// Convert position from Mat format to Point format
-				objCands[i].filterPos = Point((int)prediction.at<float>(0), (int)prediction.at<float>(1));
+				objCands[i].filterPos = Point2f(prediction.at<float>(0), prediction.at<float>(1));
 				
 				fittingLine(i);
 				//cout << "vx: " << objCands[i].direction(0) << " - vy: " << objCands[i].direction(1) << " - x0: " << objCands[i].direction(2) << " - y0: " << objCands[i].direction(3) << endl;
@@ -255,13 +265,13 @@ inline void  CarTracking::fittingLine(int idx)
 	}	
 }
 
-void CarTracking::cvtCoord(const Point &orig, Point &cvt, const Mat &img)
+void CarTracking::cvtCoord(const Point2f &orig, Point2f &cvt, const Mat &img)
 {
-	cvt.x = (orig.x - img.cols / 2);
-	cvt.y = (img.rows - orig.y);
+	cvt.x = orig.x - ( img.cols / 2.0 );
+	cvt.y = img.rows - orig.y;
 }
 
-void CarTracking::calAngle(const Point &carPos, const Mat &img, Point2f &normVxy)
+void CarTracking::calAngle(const Point2f &carPos, const Mat &img, Point2f &normVxy)
 {
 	float Vx = (float)((img.cols / 2) - carPos.x);
 	float Vy = (float)(img.rows - carPos.y);
@@ -353,5 +363,36 @@ inline void CarTracking::initExtendKalman(int objCandIdx)
 
 	setIdentity(objCands[objCandIdx].EKF.errorCovPost, Scalar::all(0.1));
 }
+
+inline void CarTracking::initVeloKF(int objCandIdx) {
+    // Setup the velocity kalman filter
+
+    objCands[objCandIdx].veloKF.statePre.at<float>(0) = 416/2; // From homog frame size
+    objCands[objCandIdx].veloKF.statePre.at<float>(1) = 480/2;
+    objCands[objCandIdx].veloKF.statePre.at<float>(2) = 0;
+    objCands[objCandIdx].veloKF.statePre.at<float>(3) = 0;
+
+    float dt = 1.0 / 30.0;
+    objCands[objCandIdx].veloKF.transitionMatrix = *(Mat_<float>(4, 4) <<
+                    1,      0,      dt,     0,
+                    0,      1,      0,      dt,
+                    0,      0,      1,      0,
+                    0,      0,      0,      1);
+
+    setIdentity(objCands[objCandIdx].veloKF.measurementMatrix);
+
+    objCands[objCandIdx].veloKF.processNoiseCov = *(Mat_<float>(4, 4) <<
+        pow((float)dt, 4)/4.0,    0,                      pow((float)dt, 3)/3.0,    0,
+        0,                      pow((float)dt, 4)/4.0,    0,                      pow((float)dt, 3)/3.0,
+        pow((float)dt, 3)/3.0,    0,                      pow((float)dt, 2)/2.0,    0,
+        0,                      pow((float)dt, 3)/3.0,    0,                      pow((float)dt, 2)/2.0);
+
+    float meas_noise    = 0.05;
+    float process_noise = 0.005;
+    objCands[objCandIdx].veloKF.processNoiseCov = objCands[objCandIdx].veloKF.processNoiseCov*( process_noise*process_noise );
+    setIdentity( objCands[objCandIdx].veloKF.measurementNoiseCov, Scalar::all( meas_noise*meas_noise ) );
+    setIdentity( objCands[objCandIdx].veloKF.errorCovPost, Scalar::all(0.1));
+}
+
 
 

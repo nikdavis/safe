@@ -24,9 +24,6 @@
 
 #define POS_LIST_LENGTH		( 5 )
 
-#define SAFETY_ELLIPSE_X	( 120 )
-#define SAFETY_ELLIPSE_Y	( 240 )
-
 class CarTracking
 {
 private:
@@ -49,22 +46,27 @@ private:
 					match(false),
 					inFrs(0),
 					outFrs(0),
-					Pos(cv::Point(0, 0)),
-					filterPos(cv::Point(0,0)),
+					Pos(cv::Point2f(0, 0)),
+					filterPos(cv::Point2f(0,0)),
+					prev_filterPos(cv::Point2f(0,0)),
+                    filterVelo(cv::Point2f(0,0)),
 					c(0),
 					frCount(0),
-					EKF(),
+                    veloKF(4, 2, 0),
 					posList(POS_LIST_LENGTH),
 					direction(0.0f, 0.0f, 0.0f, 0.0f) {};
 		bool			inFilter;
 		bool			match;			// 
 		int				inFrs;			// Number of consecutive frame to include in the filter
 		int				outFrs;			// Number of consecutive frame to exclude in the filter		
-		cv::Point		Pos;			// The Position of ObjCand
-		cv::Point		filterPos;
+		cv::Point2f		Pos;			// The Position of ObjCand
+		cv::Point2f		filterPos;
+        cv::Point2f       prev_filterPos;
+        cv::Point2f       filterVelo;
 		int				c;
 		int 			frCount;
 		ExtendedKalmanFilter	EKF;
+        cv::KalmanFilter veloKF;
 		std::vector<cv::Point>	posList;
 		cv::Vec4f			direction;
 	} ObjCand;
@@ -73,22 +75,23 @@ private:
 
 	cv::vector< cv::KeyPoint > homoKeypoints;
 
-	cv::vector< cv::Point > origKeypoints;
+	cv::vector< cv::Point2f > origKeypoints;
 	
-	void addNewObjCand( cv::Point newPt );
+	void addNewObjCand( cv::Point2f newPt );
 
-	void updateInObjCand( int idx, cv::Point Pt );
+	void updateInObjCand( int idx, cv::Point2f Pt );
 
 	void updateOutObjCand( void );
 
-	bool diffDis( cv::Point pt1, cv::Point pt2 );
+	bool diffDis( cv::Point2f pt1, cv::Point2f pt2 );
 
-	double calcDis( cv::Point pt1, cv::Point pt2) ;
+	double calcDis( cv::Point2f pt1, cv::Point2f pt2) ;
 
 	/* ---------------------------------------------------------------------------------
 	*								KALMAN FILTER
 	* --------------------------------------------------------------------------------*/
 	void initExtendKalman( int objCandIdx );
+    void initVeloKF( int objCandIdx );
 
 	/* ---------------------------------------------------------------------------------
 	*								BOUNDING BOXES
@@ -113,9 +116,9 @@ public:
 	
 	void fittingLine(int idx);
 
-	void cvtCoord(const cv::Point &orig, cv::Point &cvt, const cv::Mat &img);
+	void cvtCoord(const cv::Point2f &orig, cv::Point2f &cvt, const cv::Mat &img);
 	
-	void calAngle(const cv::Point &carPos, const cv::Mat &img, cv::Point2f &normVxy);
+	void calAngle(const cv::Point2f &carPos, const cv::Mat &img, cv::Point2f &normVxy);
 
 	/* ---------------------------------------------------------------------------------
 	*								BOUNDING BOXES
