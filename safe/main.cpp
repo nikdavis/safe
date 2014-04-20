@@ -9,8 +9,7 @@
 #include "homography.hpp"
 #include "bayesSeg.hpp"
 #include "carTracking.hpp"
-#include "EKF.hpp"
-#include "sdla.h"
+#include "sdla.hpp"
 #include <opencv2/opencv.hpp>
 #include <string>
 #include <cmath>
