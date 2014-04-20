@@ -8,6 +8,8 @@
 #include "kalman.hpp"
 #include "homography.hpp"
 #include "bayesSeg.hpp"
+#include "carTracking.hpp"
+#include "EKF.hpp"
 #include <opencv2/opencv.hpp>
 #include <string>
 #include <cmath>
@@ -22,7 +24,6 @@
 
 inline void lane_marker_filter( const cv::Mat &src, cv::Mat &dst );
 void init_vp_kalman( cv::KalmanFilter &KF );
-void mean_stddev( const cv::Mat &src, float &mean, float &stddev );
 inline void show_hough( cv::Mat &dst, const std::vector<cv::Vec4i> lines );
 inline bool calc_intersect( const cv::Vec4i l1, const cv::Vec4i l2,
                                                 cv::Point &intersect );
@@ -55,6 +56,7 @@ int main( int argc, char* argv[] ) {
     timer hmtimer( "Homography          " );
     timer etimer( "EM update           " );
     timer itimer( "EM initialization   " );
+    timer btimer( "Blob detection		" );
     timer ptimer( "Process frame       " );
     frame_source* fsrc = NULL;
 
@@ -64,7 +66,8 @@ int main( int argc, char* argv[] ) {
     Kalman1D theta(-7.0, 0.005, 0.00005);
     Kalman1D gamma(1.5, 0.001, 0.00005);		/* Kalman filters for Theta, Gamma */
 	float prev_mu, prev_sigma;
-    BayesianSegmentation bayes_seg;
+    BayesianSegmentation 	bayes_seg;
+    CarTracking				car_track;
 
     // Force update on first frame
     prev_mu = -1000.0;
@@ -139,6 +142,8 @@ int main( int argc, char* argv[] ) {
             frame = frame_raw;
         }
         utimer.stop();
+        
+        //cv::flip( frame, frame, 1);
 
 		/* Gaussian helps preprocess noise out for LMF/Canny/Hough */
         cv::GaussianBlur( frame, frame, cv::Size(3, 3), 0, 0 );
@@ -273,10 +278,74 @@ int main( int argc, char* argv[] ) {
         cv::Mat kernel = getStructuringElement(cv::MORPH_RECT, cv::Size(5, 5));
         morphologyEx(obj_frame, obj_frame, cv::MORPH_OPEN, kernel);
 
-        //** Perform blob detection
-        //** Generate distance value
-        //** tracking stuff...
+        //** Perform blob detection then passing object candidates through
+        // temporal filter. Only blobs that show up in a certain consecutive
+        // frame are considered as cars. And only cars are passed through 
+        // the extended Kalman filter.
+        btimer.start();
+        car_track.detect_filter( obj_frame );
+        btimer.stop();
+        
+        //** Find the blob bounding boxes then display them.
+        car_track.findBoundContourBox( obj_frame );
+        
+        cv::Mat blob_disp = obj_frame.clone();
+		cv::cvtColor( blob_disp, blob_disp, CV_GRAY2RGB);
+		for (unsigned int i = 0; i < car_track.boundRect.size(); i++) {
+			cv::rectangle(blob_disp, car_track.boundRect[i], Scalar(255, 0, 0), 2, 4, 0);
+		}
+		
+		cv::ellipse( blob_disp, Point(obj_frame.cols / 2, obj_frame.rows), 
+						Size(SAFETY_ELLIPSE_X, SAFETY_ELLIPSE_Y), 0, 180, 360, Scalar(0, 255, 255));
+        
+        for (unsigned int i = 0; i < car_track.objCands.size(); i++)
+		{
+			// show the center point of all blobs detected
+			cv::circle( blob_disp, car_track.objCands[i].Pos, 3, Scalar(0, 0, 255), -1);
+			
+			// Only cars will be calculated position and direction
+			if (car_track.objCands[i].inFilter)
+			{
+				
+				
+				cv::Point2f direction;
+				car_track.calAngle(car_track.objCands[i].filterPos, obj_frame, direction);
+				
+				cv::Point p1(car_track.objCands[i].filterPos.x - cvRound(100 * car_track.objCands[i].direction(0)),
+							 car_track.objCands[i].filterPos.y - cvRound(100 * car_track.objCands[i].direction(1)));
+				cv::Point p2(car_track.objCands[i].filterPos.x + cvRound(100 * car_track.objCands[i].direction(0)),
+							 car_track.objCands[i].filterPos.y + cvRound(100 * car_track.objCands[i].direction(1)));
+
+				cv::line( blob_disp, p1, p2, Scalar(255, 255, 0), 5);
+				cv::circle( blob_disp, car_track.objCands[i].Pos, 3, Scalar(255, 0, 0), -1);
+
+				cv::Point cvtP;
+				car_track.cvtCoord(p1, cvtP, obj_frame);
+				cv::Point2f feetPos((float)cvtP.x*PX_FEET_SCALE, (float)cvtP.y*PX_FEET_SCALE);
+
+				//float velocity = car_track.objCands[i].EKF.statePost.at<float>(3) * PX_FEET_SCALE * SAMPLE_FREQ * (0.682f);
+
+				std::cout << feetPos.x << "x" << feetPos.y << std::endl;
+				//cout << "velocity: " << velocity << endl;
+				
+				float a = (float)(SAFETY_ELLIPSE_X / 2);
+				float b = (float)(SAFETY_ELLIPSE_Y / 2);
+
+				if ((powf((float)cvtP.x, 2) / (a*a) + powf((float)cvtP.y, 2) / (b*b)) < 1)
+				{
+					if (std::abs(car_track.objCands[i].direction(0)*direction.x + car_track.objCands[i].direction(1)*direction.y) > 0.2)
+					{
+						std::cout << "\033[22;31mALARM\e[m" << std::endl;	
+						//waitKey(0);
+					}
+				}
+			}
+		}
+		cv::imshow( "blob display", blob_disp);
+
+		
         //** (new car addition, old car removal, correlation, etc)
+        //** Generate distance value
 
         ptimer.stop();
 
@@ -297,6 +366,7 @@ int main( int argc, char* argv[] ) {
             hmtimer.printu();
             itimer.printu();
             etimer.printu();
+            btimer.printu();
             ptimer.printm();
             std::cout << std::endl;
         }
@@ -328,6 +398,7 @@ int main( int argc, char* argv[] ) {
         hmtimer.aprintu();
         itimer.aprintu();
         etimer.aprintu();
+        btimer.aprintu();
         ptimer.aprintm();
     }
 
@@ -393,31 +464,6 @@ void init_vp_kalman( cv::KalmanFilter &KF )
 
     cv::setIdentity( KF.measurementNoiseCov, cv::Scalar::all( MEAS_NOISE * MEAS_NOISE ) );
     cv::setIdentity( KF.errorCovPost, cv::Scalar::all( 0.00001 ) );
-}
-
-// Assumes unsigned byte (uchar) elements, doesn't count zero elements
-void mean_stddev( const cv::Mat &src, float &mean, float &stddev ) {
-    int hist[256] = {0};
-    int accum = 0;
-    int size = src.rows * src.cols; // Number of elements
-    uchar *pelements = src.data;
-    for ( uchar *endp = pelements + size; pelements < endp; ++pelements ) {
-        ++hist[*pelements];
-        if ( *pelements == 0 ) --size;
-        else accum += *pelements;
-    }
-    if ( size == 0 ) { // If image was empty, zero params and return
-        mean = 0;
-        stddev = 0;
-        return;
-    }
-    mean = accum / ( float ) size;
-    accum = 0;
-    for ( int i = 1; i < 256; ++i ) {
-        float delta = ( float ) i - mean;
-        accum += ( float ) hist[i] * ( delta * delta );
-    }
-    stddev = std::sqrt( accum / ( float ) size );
 }
 
 inline void show_hough( cv::Mat &dst, const std::vector<cv::Vec4i> lines ) {
