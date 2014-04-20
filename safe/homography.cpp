@@ -52,11 +52,26 @@ void calcAnglesFromVP(cv::Mat &vp, float &theta, float &gamma) {
 	//std::cout << vpCamCoord << std::endl;
 	theta = atan( vpCamCoord.at<float>(1,0) );
 	gamma = atan( - vpCamCoord.at<float>(0,0) / cos(theta) );
+	
 	/* To degrees */
 	theta = theta * 180.0 / CV_PI;
 	gamma = gamma * 180.0 / CV_PI;
-	//std::cout << "theta: " << theta << std::endl;
-	//std::cout << "gamma: " << gamma << std::endl;
+}
+
+void calcVpFromAngles(const float &theta, const float &gamma, cv::Point &vp)
+{
+	float ftheta = theta * CV_PI / 180.0f;	
+	float fgamma = gamma * CV_PI / 180.0f;
+		
+	cv::Mat vpCamCoord(3, 1, CV_32FC1);
+	vpCamCoord.at<float>(0,0) = -tan(fgamma)*cos(ftheta);
+	vpCamCoord.at<float>(1,0) = tan(ftheta);
+	vpCamCoord.at<float>(2,0) = 1.0f;
+	
+	cv::Mat vpMat = K * vpCamCoord;
+	
+	vp.x = cvRound(vpMat.at<float>(0,0));
+	vp.y = cvRound(vpMat.at<float>(1,0));
 }
 
 void planeToPlaneHomog(cv::Mat &in, cv::Mat &out, cv::Mat &H, int outputWidth) {

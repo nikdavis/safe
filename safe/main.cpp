@@ -13,9 +13,10 @@
 #include <opencv2/opencv.hpp>
 #include <string>
 #include <cmath>
+#include <fstream>
 
 // Pause after processing each frame
-#define SINGLE_STEP             true
+#define SINGLE_STEP             false
 
 #define PRINT_TIMES             true
 #define PRINT_VP                false
@@ -66,8 +67,8 @@ int main( int argc, char* argv[] ) {
     cv::Mat frame_raw, frame, lmf_frame, hough_frame, bird_frame, obj_frame;
     MSAC msac;
     cv::Size image_size;
-    Kalman1D theta(-7.0, 0.05, 0.00005);       /* Kalman filters for Theta, Gamma */
-    Kalman1D gamma(1.5, 0.01, 0.00005);        /* init val, measure var, proc var */
+    Kalman1D theta(-7.0, 0.05f, 0.0005f);       /* Kalman filters for Theta, Gamma */
+    Kalman1D gamma(1.5, 0.05f, 0.0005f);        /* init val, measure var, proc var */
     float prev_mu, prev_sigma;
     BayesianSegmentation    bayes_seg;
     CarTracking             car_track;
@@ -226,26 +227,34 @@ int main( int argc, char* argv[] ) {
                 pvp(1) = fsrc->frame_height() / 2.0;
             }
             else {
-                /* Convert _vp from RANSAC to something Kalman filter likes, 2x1 Mat */
+                // Convert _vp from RANSAC to something Kalman filter likes, 2x1 Mat
                 pvp(0) = _vp.at<float>(0,0);
                 pvp(1) = _vp.at<float>(1,0);
             }
-            /* Convert to units of Kalman filter */
-            calcAnglesFromVP(pvp, thetaAng, gammaAng);
-            /* Only process if the delta is sane */
-            thetaDelta = fabs(thetaAng - theta.xHat);
-            gammaDelta = fabs(gammaAng - gamma.xHat);
-            xdelta = fabs(pvp(0) - prev_x); prev_x = pvp(0);
-            ydelta = fabs(pvp(1) - prev_y); prev_y = pvp(1);
-            if ( thetaDelta < 15.0 && ydelta < 10.0 ) {
-                theta.addMeas(thetaAng);
+            
+            // If the vanishing point is out of the frame, the point is not good.
+            if ((pvp(0) < 2 * frame.cols / 7) || (pvp(0) > 5 * frame.cols / 7) || 
+            	(pvp(1) < 2 * frame.rows / 5) || (pvp(1) > 3 * frame.rows / 5)) {
+            	theta.skipMeas();
+            	gamma.skipMeas();
             } else {
-                theta.skipMeas();
-            }
-            if ( gammaDelta < 25.0 && xdelta < 10.0 ) {
-                gamma.addMeas(gammaAng);
-            } else {
-                gamma.skipMeas();
+		        /* Convert to units of Kalman filter */
+		        calcAnglesFromVP(pvp, thetaAng, gammaAng);
+		        /* Only process if the delta is sane */
+		        thetaDelta = fabs(thetaAng - theta.xHat);
+		        gammaDelta = fabs(gammaAng - gamma.xHat);
+		        xdelta = fabs(pvp(0) - prev_x); prev_x = pvp(0);
+		        ydelta = fabs(pvp(1) - prev_y); prev_y = pvp(1);
+		        if ( thetaDelta < 15.0 && ydelta < 10.0 ) {
+		            theta.addMeas(thetaAng);
+		        } else {
+		            theta.skipMeas();
+		        }
+		        if ( gammaDelta < 25.0 && xdelta < 10.0 ) {
+		            gamma.addMeas(gammaAng);
+		        } else {
+		            gamma.skipMeas();
+		        }
             }
         } else {
             theta.skipMeas();
@@ -254,6 +263,10 @@ int main( int argc, char* argv[] ) {
         ktimer.stop();
         draw_cross( hough_frame, cv::Point( vp(0,0), vp(1,0) ),
                                  cv::Scalar( 0, 255, 0 ), 4 );
+		cv::Point filter_vp;
+		calcVpFromAngles(theta.xHat, gamma.xHat, filter_vp); 
+		cv::circle( hough_frame, filter_vp, 3, cv::Scalar(0, 255, 255 ), 4 );
+                        
 
         /* Generate IPM or BIRDS-EYE view with plane-to-plane homography */
         hmtimer.start();
@@ -331,7 +344,7 @@ int main( int argc, char* argv[] ) {
                 cv::Point2f feetPos((float)cvtP.x*PX_FEET_SCALE, (float)cvtP.y*PX_FEET_SCALE);
 
                 cv::Point2f lstart = car_track.objCands[i].filterPos;
-                cv::Point2f lend = car_track.objCands[i].filterPos + car_track.objCands[i].filterVelo;
+                cv::Point2f lend = car_track.objCands[i].filterPos + 100 * car_track.objCands[i].filterVelo;
                 cv::line( blob_disp, lstart, lend, cv::Scalar(0, 128, 0), 4);
 
                 std::cout << "Object[" << i << "] x: " << feetPos.x << " y: " << feetPos.y
@@ -354,10 +367,11 @@ int main( int argc, char* argv[] ) {
                     float dist = 480 - car_track.objCands[i].filterPos.y;
                     if ( stopdist > dist ) {
                         // Alert user of potential hazard
-                       // TODO: Setup leveled response, deal with priority properly
-                        std::cout << "ALERT!" << std::endl;
+                        // TODO: Setup leveled response, deal with priority properly
+                        std::cout << "\033[22;31mAERT!\e[m" << std::endl;
                         alarming = true;
                         alarm.set_interval( 0, 100 );
+                        alarm.play_WAV();
                     }
                 }
             }
