@@ -7,7 +7,7 @@ LIBS += -lflycapture-c `pkg-config --libs opencv`
 LIBS += `sdl-config --libs`
 
 OBJS += lmmin.o errorNIETO.o MSAC.o fireflymv_camera.o fsource.o cvwin.o
-OBJS += timer.o homography.o kalman.o bayesSeg.o sdla.o main.o
+OBJS += timer.o homography.o kalman.o bayesSeg.o sdla.o carTracking.o EKF.o main.o
 
 default : CFLAGS += -O3
 default : $(OUTPUT)
@@ -55,6 +55,12 @@ lmmin.o : lmmin.c lmmin.h lmstruct.h
 
 bayesSeg.o : bayesSeg.cpp bayesSeg.hpp
 	$(CC) $(CFLAGS) -c bayesSeg.cpp
+
+carTracking.o : carTracking.cpp carTracking.hpp
+	$(CC) $(CFLAGS) -c carTracking.cpp
+
+EKF.o : EKF.cpp EKF.hpp
+	$(CC) $(CFLAGS) -c EKF.cpp
 
 clean:
 	rm -f *.o $(OUTPUT)
