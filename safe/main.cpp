@@ -9,14 +9,13 @@
 #include "homography.hpp"
 #include "bayesSeg.hpp"
 #include "carTracking.hpp"
-#include "EKF.hpp"
-#include "sdla.h"
+#include "sdla.hpp"
 #include <opencv2/opencv.hpp>
 #include <string>
 #include <cmath>
 
 // Pause after processing each frame
-#define SINGLE_STEP             false
+#define SINGLE_STEP             true
 
 #define PRINT_TIMES             true
 #define PRINT_VP                false
@@ -43,12 +42,16 @@ cv::Mat distCoeffMat = cv::Mat(5, 1, CV_64F, distCoeffData).clone();
 
 
 int main( int argc, char* argv[] ) {
+    srand(0); // Force consistent results on reruns
+
     sdla audio( "boop.wav" );
+
     int undist = 1;
     cvwin win_a( "frame" );
     cvwin win_b( "bird_frame" );
     cvwin win_c( "hough_frame" );
     cvwin win_d( "obj_frame" );
+    cvwin win_e( "blob display" );
     timer utimer( "Undistort           " );
     timer ltimer( "Lane filter         " );
     timer ctimer( "Canny edge detection" );
@@ -58,7 +61,7 @@ int main( int argc, char* argv[] ) {
     timer hmtimer( "Homography          " );
     timer etimer( "EM update           " );
     timer itimer( "EM initialization   " );
-    timer btimer( "Blob detection		" );
+    timer btimer( "Blob detection      " );
     timer ptimer( "Process frame       " );
     frame_source* fsrc = NULL;
 
@@ -66,10 +69,10 @@ int main( int argc, char* argv[] ) {
     MSAC msac;
     cv::Size image_size;
     Kalman1D theta(-7.0, 0.005, 0.00005);
-    Kalman1D gamma(1.5, 0.001, 0.00005);		/* Kalman filters for Theta, Gamma */
-	float prev_mu, prev_sigma;
-    BayesianSegmentation 	bayes_seg;
-    CarTracking				car_track;
+    Kalman1D gamma(1.5, 0.001, 0.00005);        /* Kalman filters for Theta, Gamma */
+    float prev_mu, prev_sigma;
+    BayesianSegmentation    bayes_seg;
+    CarTracking             car_track;
 
     // Force update on first frame
     prev_mu = -1000.0;
@@ -135,11 +138,11 @@ int main( int argc, char* argv[] ) {
     while ( fsrc->get_frame( frame_raw ) == 0 ) {
         ptimer.start();
 
-	    /* Explicitly undistorting our FireflyMV camera */
+        /* Explicitly undistorting our FireflyMV camera */
 
         utimer.start();
-        if(undist) {
-	        cv::undistort(frame_raw, frame, cameraMat, distCoeffMat);
+        if ( undist ) {
+            cv::undistort(frame_raw, frame, cameraMat, distCoeffMat);
         } else {
             frame = frame_raw;
         }
@@ -147,7 +150,7 @@ int main( int argc, char* argv[] ) {
         
         //cv::flip( frame, frame, 1);
 
-		/* Gaussian helps preprocess noise out for LMF/Canny/Hough */
+        /* Gaussian helps preprocess noise out for LMF/Canny/Hough */
         cv::GaussianBlur( frame, frame, cv::Size(3, 3), 0, 0 );
         cv::GaussianBlur( frame, frame, cv::Size(3, 3), 0, 0 );
 
@@ -216,27 +219,34 @@ int main( int argc, char* argv[] ) {
         cv::Mat_<float> pvp(2,1);
         float thetaAng, gammaAng, thetaDelta, gammaDelta;
         if( vp_detected ) {
-            /* Convert _vp from RANSAC to something Kalman filter likes, 2x1 Mat */
-            pvp(0) = _vp.at<float>(0,0);
-            pvp(1) = _vp.at<float>(1,0);
+            /* Ensure VP values are not NaN! Default to center of frame */
+            if ( IS_NAN(_vp.at<float>(0,0)) || IS_NAN(_vp.at<float>(1,0)) ) {
+                pvp(0) = fsrc->frame_width() / 2.0;
+                pvp(1) = fsrc->frame_height() / 2.0;
+            }
+            else {
+                /* Convert _vp from RANSAC to something Kalman filter likes, 2x1 Mat */
+                pvp(0) = _vp.at<float>(0,0);
+                pvp(1) = _vp.at<float>(1,0);
+            }
             /* Convert to units of Kalman filter */
             calcAnglesFromVP(pvp, thetaAng, gammaAng);
             /* Only process if the delta is sane */
             thetaDelta = abs(thetaAng - theta.xHat);
             gammaDelta = abs(gammaAng - gamma.xHat);
             if(thetaDelta < 15.0) {
-            	theta.addMeas(thetaAng);
+                theta.addMeas(thetaAng);
             } else {
-            	theta.skipMeas();
+                theta.skipMeas();
             }
             if(gammaDelta < 25.0) {
-            	gamma.addMeas(gammaAng);
+                gamma.addMeas(gammaAng);
             } else {
-            	gamma.skipMeas();
+                gamma.skipMeas();
             }
         } else {
-        	theta.skipMeas();
-        	gamma.skipMeas();
+            theta.skipMeas();
+            gamma.skipMeas();
         }
         ktimer.stop();
         draw_cross( hough_frame, cv::Point( vp(0,0), vp(1,0) ),
@@ -248,8 +258,9 @@ int main( int argc, char* argv[] ) {
         generateHomogMat(H, -theta.xHat, -gamma.xHat);
         planeToPlaneHomog(frame, bird_frame, H, 400);
         hmtimer.stop();
-		/* Printing prints estimates of the angles, not raw */
-        if ( PRINT_ANGLES ) cout << "ANGLE: " << theta.xHat << "," << gamma.xHat<< endl;
+
+        /* Printing prints estimates of the angles, not raw */
+        if ( PRINT_ANGLES ) std::cout << "ANGLE: " << theta.xHat << "," << gamma.xHat << std::endl;
 
         //** Calculate homog. intensity feature frame mu and sigma
         float mu, sigma;        
@@ -292,60 +303,55 @@ int main( int argc, char* argv[] ) {
         car_track.findBoundContourBox( obj_frame );
         
         cv::Mat blob_disp = obj_frame.clone();
-		cv::cvtColor( blob_disp, blob_disp, CV_GRAY2RGB);
-		for (unsigned int i = 0; i < car_track.boundRect.size(); i++) {
-			cv::rectangle(blob_disp, car_track.boundRect[i], Scalar(255, 0, 0), 2, 4, 0);
-		}
-		
-		cv::ellipse( blob_disp, Point(obj_frame.cols / 2, obj_frame.rows), 
-						Size(SAFETY_ELLIPSE_X, SAFETY_ELLIPSE_Y), 0, 180, 360, Scalar(0, 255, 255));
+        cv::cvtColor( blob_disp, blob_disp, CV_GRAY2RGB);
+        for (unsigned int i = 0; i < car_track.boundRect.size(); i++) {
+            cv::rectangle( blob_disp, car_track.boundRect[i], cv::Scalar(255, 0, 0), 2, 4, 0 );
+        }
+        
+        cv::ellipse( blob_disp, cv::Point( obj_frame.cols / 2, obj_frame.rows ), 
+                        cv::Size( SAFETY_ELLIPSE_X, SAFETY_ELLIPSE_Y ), 0, 180, 360, cv::Scalar(0, 255, 255) );
         
         for (unsigned int i = 0; i < car_track.objCands.size(); i++)
-		{
-			// show the center point of all blobs detected
-			cv::circle( blob_disp, car_track.objCands[i].Pos, 3, Scalar(0, 0, 255), -1);
-			
-			// Only cars will be calculated position and direction
-			if (car_track.objCands[i].inFilter)
-			{
-				
-				
-				cv::Point2f direction;
-				car_track.calAngle(car_track.objCands[i].filterPos, obj_frame, direction);
-				
-				cv::Point p1(car_track.objCands[i].filterPos.x - cvRound(100 * car_track.objCands[i].direction(0)),
-							 car_track.objCands[i].filterPos.y - cvRound(100 * car_track.objCands[i].direction(1)));
-				cv::Point p2(car_track.objCands[i].filterPos.x + cvRound(100 * car_track.objCands[i].direction(0)),
-							 car_track.objCands[i].filterPos.y + cvRound(100 * car_track.objCands[i].direction(1)));
+        {
+            // show the center point of all blobs detected
+            cv::circle( blob_disp, car_track.objCands[i].Pos, 3, cv::Scalar(0, 0, 255), -1);
+            
+            // Only cars will be calculated position and direction
+            if (car_track.objCands[i].inFilter)
+            {
+                cv::Point2f direction;
+                car_track.calAngle(car_track.objCands[i].filterPos, obj_frame, direction);
+                
+                cv::Point p1(car_track.objCands[i].filterPos.x - cvRound(100 * car_track.objCands[i].direction(0)),
+                             car_track.objCands[i].filterPos.y - cvRound(100 * car_track.objCands[i].direction(1)));
+                cv::Point p2(car_track.objCands[i].filterPos.x + cvRound(100 * car_track.objCands[i].direction(0)),
+                             car_track.objCands[i].filterPos.y + cvRound(100 * car_track.objCands[i].direction(1)));
 
-				cv::line( blob_disp, p1, p2, Scalar(255, 255, 0), 5);
-				cv::circle( blob_disp, car_track.objCands[i].Pos, 3, Scalar(255, 0, 0), -1);
+                cv::line( blob_disp, p1, p2, cv::Scalar(255, 255, 0), 5);
+                cv::circle( blob_disp, car_track.objCands[i].Pos, 3, cv::Scalar(255, 0, 0), -1);
 
-				cv::Point cvtP;
-				car_track.cvtCoord(p1, cvtP, obj_frame);
-				cv::Point2f feetPos((float)cvtP.x*PX_FEET_SCALE, (float)cvtP.y*PX_FEET_SCALE);
+                cv::Point cvtP;
+                car_track.cvtCoord(p1, cvtP, obj_frame);
+                cv::Point2f feetPos((float)cvtP.x*PX_FEET_SCALE, (float)cvtP.y*PX_FEET_SCALE);
 
-				//float velocity = car_track.objCands[i].EKF.statePost.at<float>(3) * PX_FEET_SCALE * SAMPLE_FREQ * (0.682f);
+                //float velocity = car_track.objCands[i].EKF.statePost.at<float>(3) * PX_FEET_SCALE * SAMPLE_FREQ * (0.682f);
 
-				std::cout << feetPos.x << "x" << feetPos.y << std::endl;
-				//cout << "velocity: " << velocity << endl;
-				
-				float a = (float)(SAFETY_ELLIPSE_X / 2);
-				float b = (float)(SAFETY_ELLIPSE_Y / 2);
+                std::cout << "Object[" << i << "] x: " << feetPos.x << " Y: " << feetPos.y << std::endl;
+                //cout << "velocity: " << velocity << endl;
+                
+                float a = (float)(SAFETY_ELLIPSE_X / 2);
+                float b = (float)(SAFETY_ELLIPSE_Y / 2);
 
-				if ((powf((float)cvtP.x, 2) / (a*a) + powf((float)cvtP.y, 2) / (b*b)) < 1)
-				{
-					if (std::abs(car_track.objCands[i].direction(0)*direction.x + car_track.objCands[i].direction(1)*direction.y) > 0.2)
-					{
-						std::cout << "\033[22;31mALARM\e[m" << std::endl;	
-						//waitKey(0);
-					}
-				}
-			}
-		}
-		cv::imshow( "blob display", blob_disp);
-
-		
+                if ((powf((float)cvtP.x, 2) / (a*a) + powf((float)cvtP.y, 2) / (b*b)) < 1)
+                {
+                    if (std::abs(car_track.objCands[i].direction(0)*direction.x + car_track.objCands[i].direction(1)*direction.y) > 0.2)
+                    {
+                        std::cout << "***ALARM***" << std::endl;
+                    }
+                }
+            }
+        }
+        
         //** (new car addition, old car removal, correlation, etc)
         //** Generate distance value
 
@@ -356,10 +362,11 @@ int main( int argc, char* argv[] ) {
         win_b.display_frame( bird_frame );
         win_c.display_frame( hough_frame );
         win_d.display_frame( obj_frame );
+        win_e.display_frame( blob_disp );
 
         if ( PRINT_TIMES ) {
             // Print timer results
-			utimer.printu();
+            utimer.printu();
             ltimer.printu();
             ctimer.printu();
             htimer.printu();
@@ -377,13 +384,13 @@ int main( int argc, char* argv[] ) {
         key = cv::waitKey(1);
         if ( SINGLE_STEP ) {
             while( key < 0 ) {
-				key = cv::waitKey(1);
-			}
+                key = cv::waitKey(1);
+            }
         }
-	/* Quit if key is ESC or q */
+    /* Quit if key is ESC or q */
         if(key == 27 || key == 'q') break;
         else if(key == 'u') {
-			/* u key switches undistortion on/off. default is on. */
+            /* u key switches undistortion on/off. default is on. */
             undist = (undist + 1) % 2;
         }
     }
@@ -391,7 +398,7 @@ int main( int argc, char* argv[] ) {
 
     if ( PRINT_TIMES ) {
         // Print average timer results
-		utimer.aprintu();
+        utimer.aprintu();
         ltimer.aprintu();
         ctimer.aprintu();
         htimer.aprintu();
@@ -406,6 +413,8 @@ int main( int argc, char* argv[] ) {
 
     // Pause if no key was pressed during processing loop
     if ( !SINGLE_STEP ) while( key < 0 ) key = cv::waitKey( 30 );
+
+    std::cout << "Cleaning up..." << std::endl;
 
     delete fsrc;
     return 0;
@@ -449,7 +458,7 @@ void init_vp_kalman( cv::KalmanFilter &KF )
     KF.statePre.at<float>(2) = 0;
     KF.statePre.at<float>(3) = 0;
     KF.transitionMatrix = *(cv::Mat_<float>(4, 4) <<
-                    1,      0,      1/kfdt,		0,
+                    1,      0,      1/kfdt, 0,
                     0,      1,      0,      1/kfdt,
                     0,      0,      1,      0,
                     0,      0,      0,      1);
@@ -458,10 +467,10 @@ void init_vp_kalman( cv::KalmanFilter &KF )
     //cv::setIdentity(KF.processNoiseCov, cv::Scalar::all(1e-4));
 
     KF.processNoiseCov = *(cv::Mat_<float>(4, 4) <<
-        pow((float)kfdt, 4)/4.0,    0,  							pow((float)kfdt, 3)/3.0,    0,
-        0,  						pow((float)kfdt, 4)/4.0,    	0,  						pow((float)kfdt, 3)/3.0,
-        pow((float)kfdt, 3)/3.0,    0,                      		pow((float)kfdt, 2)/2.0,    0,
-        0,  						pow((float)kfdt, 3)/3.0,   		0,  						pow((float)kfdt, 2)/2.0);
+        pow((float)kfdt, 4)/4.0,    0,                              pow((float)kfdt, 3)/3.0,    0,
+        0,                          pow((float)kfdt, 4)/4.0,        0,                          pow((float)kfdt, 3)/3.0,
+        pow((float)kfdt, 3)/3.0,    0,                              pow((float)kfdt, 2)/2.0,    0,
+        0,                          pow((float)kfdt, 3)/3.0,        0,                          pow((float)kfdt, 2)/2.0);
     KF.processNoiseCov = KF.processNoiseCov*( PROCESS_NOISE * PROCESS_NOISE );
 
     cv::setIdentity( KF.measurementNoiseCov, cv::Scalar::all( MEAS_NOISE * MEAS_NOISE ) );

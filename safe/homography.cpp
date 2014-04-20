@@ -6,8 +6,9 @@
  */
 
 #include "homography.hpp"
-
-
+#include <opencv2/imgproc/imgproc.hpp>
+#include <cmath>
+#include <iostream>
 
 /* We want to move up away from the road, so intuition says
  * we want a positive Y translation. But Y gets mapped to
@@ -27,15 +28,15 @@
  */
 
 static cv::Mat A1 = (cv::Mat_<float>(4,3) <<
-        1,	0,	-OUTPUT_SIZE_X/2,
-        0,	1,	-CAM_RES_Y/2,
+        1,	0,	-OUTPUT_SIZE_X/2.0,
+        0,	1,	-CAM_RES_Y/2.0,
         0,	0,	0,
         0,	0,	1);
 
 /* Should be from camera calibration */
 static cv::Mat K = (cv::Mat_<float>(3,3) <<
-    FOCAL_IN_PX,	0,				CAM_RES_X/2,
-    0,				FOCAL_IN_PX,	CAM_RES_Y/2,
+    FOCAL_IN_PX,	0,				CAM_RES_X/2.0,
+    0,				FOCAL_IN_PX,	CAM_RES_Y/2.0,
     0,				0,				1);
 static cv::Mat Kinv = K.inv();
 
@@ -43,19 +44,19 @@ cv::Mat vpHomog = cv::Mat::zeros( 3, 1, CV_32FC1);
 
 /* Should ditch degrees since everything is in rads */
 void calcAnglesFromVP(cv::Mat &vp, float &theta, float &gamma) {
-	//cout << vp << endl;
+	//std::cout << vp << std::endl;
 	vpHomog.at<float>(0,0) = vp.at<float>(0,0);
 	vpHomog.at<float>(1,0) = vp.at<float>(1,0);
 	vpHomog.at<float>(2,0) = 1;
 	cv::Mat vpCamCoord = Kinv * vpHomog;
-	//cout << vpCamCoord << endl;
+	//std::cout << vpCamCoord << std::endl;
 	theta = atan( vpCamCoord.at<float>(1,0) );
 	gamma = atan( - vpCamCoord.at<float>(0,0) / cos(theta) );
 	/* To degrees */
 	theta = theta * 180.0 / CV_PI;
 	gamma = gamma * 180.0 / CV_PI;
-	//cout << "theta: " << theta << endl;
-	//cout << "gamma: " << gamma << endl;
+	//std::cout << "theta: " << theta << std::endl;
+	//std::cout << "gamma: " << gamma << std::endl;
 }
 
 void planeToPlaneHomog(cv::Mat &in, cv::Mat &out, cv::Mat &H, int outputWidth) {

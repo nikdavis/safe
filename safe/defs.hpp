@@ -45,6 +45,9 @@ typedef unsigned char uchar;
                color, 1, CV_AA, 0 );                        \
     } while ( false )
 
+// Not portable, but works for our dev. board and systems
+#define IS_NAN( f ) ( ( f ) != ( f ) )
+
 #ifdef DEBUG
 #define DMESG( v ) do { std::cout << v << std::endl; } while ( false )
 #else

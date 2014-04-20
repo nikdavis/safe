@@ -20,7 +20,7 @@ all: ${OUTPUT}
 $(OUTPUT) : $(OBJS)
 	$(CC) -o $(OUTPUT) $(OBJS) $(LIBS)
 
-main.o : main.cpp sdla.hpp defs.hpp fsource.hpp timer.hpp cvwin.hpp MSAC.hpp bayesSeg.hpp
+main.o : main.cpp defs.hpp fsource.hpp cvwin.hpp timer.hpp MSAC.hpp kalman.hpp bayesSeg.hpp carTracking.hpp sdla.hpp
 	$(CC) $(CFLAGS) -c main.cpp
 
 sdla.o : sdla.cpp sdla.hpp
@@ -44,7 +44,7 @@ fsource.o : fsource.cpp defs.hpp fsource.hpp fireflymv_camera.hpp
 fireflymv_camera.o : fireflymv_camera.cpp defs.hpp fireflymv_camera.hpp
 	$(CC) $(CFLAGS) -c fireflymv_camera.cpp
 
-MSAC.o : MSAC.cpp defs.hpp MSAC.hpp errorNIETO.hpp
+MSAC.o : MSAC.cpp defs.hpp MSAC.hpp errorNIETO.hpp lmmin.h
 	$(CC) $(CFLAGS) -c MSAC.cpp
 
 errorNIETO.o : errorNIETO.cpp errorNIETO.hpp
@@ -56,7 +56,7 @@ lmmin.o : lmmin.c lmmin.h lmstruct.h
 bayesSeg.o : bayesSeg.cpp bayesSeg.hpp
 	$(CC) $(CFLAGS) -c bayesSeg.cpp
 
-carTracking.o : carTracking.cpp carTracking.hpp
+carTracking.o : carTracking.cpp EKF.hpp carTracking.hpp
 	$(CC) $(CFLAGS) -c carTracking.cpp
 
 EKF.o : EKF.cpp EKF.hpp

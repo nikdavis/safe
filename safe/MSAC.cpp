@@ -1,7 +1,10 @@
+// FILE: MSAC.cpp
+
 #include "MSAC.hpp"
 #include "errorNIETO.hpp"
 #include "lmmin.h"
 #include "defs.hpp"
+#include <cmath>
 
 using namespace std;
 using namespace cv;

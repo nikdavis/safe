@@ -1,29 +1,29 @@
+// FILE: EKF.cpp
+
 #include "EKF.hpp"
 
 using namespace cv;
 using namespace std;
 
-
 ExtendedKalmanFilter::ExtendedKalmanFilter(void)
 {
-	measurementMatrix = Mat(EKF_MEAS, EKF_DYNAMIC, CV_32FC1);
+    measurementMatrix = Mat(EKF_MEAS, EKF_DYNAMIC, CV_32FC1);
 
-	processNoiseCov = Mat(EKF_DYNAMIC, EKF_DYNAMIC, CV_32FC1);
+    processNoiseCov = Mat(EKF_DYNAMIC, EKF_DYNAMIC, CV_32FC1);
 
-	measurementNoiseCov = Mat(EKF_MEAS, EKF_MEAS, CV_32FC1);
+    measurementNoiseCov = Mat(EKF_MEAS, EKF_MEAS, CV_32FC1);
 
-	errorCovPost = Mat(EKF_DYNAMIC, EKF_DYNAMIC, CV_32FC1);
+    errorCovPost = Mat(EKF_DYNAMIC, EKF_DYNAMIC, CV_32FC1);
 
-	errorCovPre = Mat(EKF_DYNAMIC, EKF_DYNAMIC, CV_32FC1);
+    errorCovPre = Mat(EKF_DYNAMIC, EKF_DYNAMIC, CV_32FC1);
 
-	transitionMatrix = Mat(EKF_DYNAMIC, EKF_DYNAMIC, CV_32FC1);
+    transitionMatrix = Mat(EKF_DYNAMIC, EKF_DYNAMIC, CV_32FC1);
 
-	statePre = Mat(EKF_DYNAMIC, 1, CV_32FC1);
+    statePre = Mat(EKF_DYNAMIC, 1, CV_32FC1);
 
-	statePost = Mat(EKF_DYNAMIC, 1, CV_32FC1);
-	
-	Kgain = Mat(EKF_DYNAMIC, EKF_MEAS, CV_32FC1);
+    statePost = Mat(EKF_DYNAMIC, 1, CV_32FC1);
 
+    Kgain = Mat(EKF_DYNAMIC, EKF_MEAS, CV_32FC1);
 }
 
 ExtendedKalmanFilter::~ExtendedKalmanFilter(void)
@@ -83,3 +83,6 @@ Mat ExtendedKalmanFilter::correct(Mat measure)
 	errorCovPost = (eye - Kgain*measurementMatrix)*errorCovPre;
 	return statePost;
 }
+
+
+

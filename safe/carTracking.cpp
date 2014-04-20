@@ -1,8 +1,12 @@
+// FILE: carTracking.cpp
+
 #include "carTracking.hpp"
+#include <fstream>
+#include <iostream>
+#include <cmath>
 
 using namespace cv;
 using namespace std;
-
 
 // LUT for the number of consecutive frames to
 // consider object is out of frame
@@ -29,10 +33,17 @@ CarTracking::CarTracking(void)
 	params.filterByArea = true;
 	params.filterByColor = false;
 	params.filterByCircularity = false;
+    params.filterByInertia = false;
+    params.filterByConvexity = false;
 
 	// set up and create the detector using the parameters
-	blob_detector = new cv::SimpleBlobDetector(params);
+	blob_detector = new SimpleBlobDetector(params);
 	blob_detector->create("SimpleBlob");
+}
+
+CarTracking::~CarTracking( void ) {
+    delete blob_detector;
+    blob_detector = 0;
 }
 
 /* ---------------------------------------------------------------------------------

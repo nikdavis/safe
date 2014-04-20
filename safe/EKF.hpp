@@ -1,14 +1,9 @@
+// FILE: EKF.hpp
+
 #ifndef _EKF_H_
 #define _EKF_H_
 
 #include <opencv2/core/core.hpp>
-#include <opencv2/highgui/highgui.hpp>
-#include <opencv2/imgproc/imgproc.hpp>
-#include <stdio.h>
-#include <stdlib.h>
-#include <iostream>
-#include <pthread.h>
-#include <string>
 
 #define x_hat(i)				( statePost.at<float>(i) )
 #define x_hat_pre(i)			( statePre.at<float>(i) )
@@ -28,42 +23,38 @@
 #define EKF_dt					( 1/ EKF_SAMPLE_FREQ )
 #endif
 
+class ExtendedKalmanFilter {
+    public:
+        ExtendedKalmanFilter( void );
 
-using namespace cv;
-using namespace std;
+        ~ExtendedKalmanFilter( void );
 
+        cv::Mat processNoiseCov;
 
+        cv::Mat measurementNoiseCov;
 
-class ExtendedKalmanFilter
-{
-public:
-	ExtendedKalmanFilter();
+        cv::Mat transitionMatrix;
 
-	~ExtendedKalmanFilter();
+        cv::Mat measurementMatrix;
 
-	Mat processNoiseCov;
+        cv::Mat statePre;
 
-	Mat measurementNoiseCov;
+        cv::Mat statePost;
 
-	Mat transitionMatrix;
+        cv::Mat errorCovPost;
 
-	Mat measurementMatrix;
+        cv::Mat errorCovPre;
 
-	Mat statePre;
+        cv::Mat Kgain;
 
-	Mat statePost;
+        cv::Mat predict( void );
 
-	Mat errorCovPost;
+        cv::Mat correct( cv::Mat measure );
 
-	Mat errorCovPre;
-
-	Mat Kgain;
-
-	Mat predict();
-
-	Mat correct(Mat measure);
-
-	void calJacobian();
+        void calJacobian( void );
 };
 
 #endif /* _EKF_H_ */
+
+
+

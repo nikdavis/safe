@@ -1,13 +1,10 @@
+// FILE: MSAC.hpp
+
 #ifndef _MSAC_HPP_
 #define _MSAC_HPP_
 
-#include "opencv/cv.h"      
-#include "opencv/highgui.h" 
-#include "opencv/cxcore.h"  
-
+#include "opencv/cv.h"
 #include "errorNIETO.hpp"
-
-#include <cmath>
 
 #define MODE_LS     0
 #define MODE_NIETO  1

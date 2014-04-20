@@ -1,22 +1,11 @@
+// FILE: carTracking.hpp
+
 #ifndef __CAR_TRACKING_HPP__
 #define __CAR_TRACKING_HPP__
 
-#include <iostream>
 #include <vector>
-#include <math.h>
-#include <string>
-#include <sstream> 
-#include <fstream> 
 #include <cv.h>
-#include <opencv2/highgui/highgui.hpp>
-#include <opencv2/video/tracking.hpp>
-#include <opencv2/calib3d/calib3d.hpp>
-#include "homography.hpp"
 #include "EKF.hpp"
-#include "defs.hpp"
-
-using namespace cv;
-using namespace std;
 
 #define EKF_THETA_NOISE		( 1 )
 #define EKF_ACCE_NOISE		( 1 )
@@ -46,7 +35,7 @@ private:
 	// LUT for the size of bounding box for objects
 	static int boxSize[17];
 
-	SimpleBlobDetector::Params params;
+	cv::SimpleBlobDetector::Params params;
 
 	/* ---------------------------------------------------------------------------------
 	*							SIMPLE BLOB DETECTION
@@ -58,82 +47,86 @@ private:
 					match(false),
 					inFrs(0),
 					outFrs(0),
-					Pos(Point(0, 0)), 
-					filterPos(Point(0,0)),
+					Pos(cv::Point(0, 0)),
+					filterPos(cv::Point(0,0)),
 					c(0),
 					frCount(0),
-					EKF(), 
+					EKF(),
 					posList(POS_LIST_LENGTH),
 					direction(0.0f, 0.0f, 0.0f, 0.0f) {};
 		bool			inFilter;
 		bool			match;			// 
 		int				inFrs;			// Number of consecutive frame to include in the filter
 		int				outFrs;			// Number of consecutive frame to exclude in the filter		
-		Point			Pos;			// The Position of ObjCand
-		Point			filterPos;	
+		cv::Point		Pos;			// The Position of ObjCand
+		cv::Point		filterPos;
 		int				c;
 		int 			frCount;
 		ExtendedKalmanFilter	EKF;
-		vector<Point>	posList;
-		Vec4f			direction;
+		std::vector<cv::Point>	posList;
+		cv::Vec4f			direction;
 	} ObjCand;
 	
-	Ptr< FeatureDetector > blob_detector;
+	cv::SimpleBlobDetector *blob_detector;
 
-	vector< KeyPoint > homoKeypoints;
+	cv::vector< cv::KeyPoint > homoKeypoints;
 
-	vector< Point > origKeypoints;
+	cv::vector< cv::Point > origKeypoints;
 	
-	void addNewObjCand(Point newPt);
+	void addNewObjCand( cv::Point newPt );
 
-	void updateInObjCand(int idx, Point Pt);
+	void updateInObjCand( int idx, cv::Point Pt );
 
-	void updateOutObjCand(void);
+	void updateOutObjCand( void );
 
-	bool diffDis(Point pt1, Point pt2);
+	bool diffDis( cv::Point pt1, cv::Point pt2 );
 
-	double calcDis(Point pt1, Point pt2);
+	double calcDis( cv::Point pt1, cv::Point pt2) ;
 
 	/* ---------------------------------------------------------------------------------
 	*								KALMAN FILTER
 	* --------------------------------------------------------------------------------*/
-	void initExtendKalman(int objCandIdx);
+	void initExtendKalman( int objCandIdx );
 
 	/* ---------------------------------------------------------------------------------
 	*								BOUNDING BOXES
 	* --------------------------------------------------------------------------------*/
-	vector< vector< Point > > contours_poly;
+	cv::vector< cv::vector< cv::Point > > contours_poly;
 	
-	vector< vector< Point > > contours;
+	cv::vector< cv::vector< cv::Point > > contours;
 
-	vector< Vec4i > hierarchy;
+	cv::vector< cv::Vec4i > hierarchy;
 
 public:
 	// Initialize CarTracking paramaters
 	CarTracking(void);
+	~CarTracking(void);
 
 	/* ---------------------------------------------------------------------------------
 	*							SIMPLE BLOB DETECTION
 	* --------------------------------------------------------------------------------*/
-	vector< ObjCand > objCands;
+	cv::vector< ObjCand > objCands;
 
-	void detect_filter(const Mat &img);
+	void detect_filter(const cv::Mat &img);
 	
 	void fittingLine(int idx);
 
-	void cvtCoord(const Point &orig, Point &cvt, const Mat &img);
+	void cvtCoord(const cv::Point &orig, cv::Point &cvt, const cv::Mat &img);
 	
-	void calAngle(const Point &carPos, const Mat &img, Point2f &normVxy);
+	void calAngle(const cv::Point &carPos, const cv::Mat &img, cv::Point2f &normVxy);
 
 	/* ---------------------------------------------------------------------------------
 	*								BOUNDING BOXES
 	* --------------------------------------------------------------------------------*/
 	
-	vector< Rect > boundRect;
+	cv::vector< cv::Rect > boundRect;
 
-	void findBoundContourBox(const Mat &img);
+	void findBoundContourBox( const cv::Mat &img );
 
 };
 
 
 #endif /* __CAR_TRACKING_HPP__ */
+
+
+

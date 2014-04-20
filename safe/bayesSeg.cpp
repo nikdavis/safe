@@ -95,13 +95,16 @@ void BayesianSegmentation::autoInitEM(const Mat &bird_frame)
 	//** Calculate ip_mu and ip_sigma of ip_frame pixels values
 	mean_stddev(ip_frame, ip_mu, ip_sigma);
 
-	int thresh = 4;
-	do {
-		cv::threshold(bird_frame, il_frame, thresh * (ip_mu + ip_sigma) / 4, 255, CV_THRESH_TOZERO);
-		mean_stddev(il_frame, il_mu, il_sigma);
-		thresh--;
-	} while (!il_mu);
+    // Adjustment loop was causing infinite loop in homog failure mode (bad angles)
+	cv::threshold(bird_frame, il_frame, ip_mu + ip_sigma, 255, CV_THRESH_TOZERO);
+	mean_stddev(il_frame, il_mu, il_sigma);
 
+    // Removed and replaced with this test
+	if (il_mu == 0)
+	{
+		io_mu = 240;
+		io_sigma = 10;
+	}
 
 	cv::threshold(bird_frame, io_frame, ip_mu - ip_sigma, 255, CV_THRESH_TOZERO_INV);
 	mean_stddev(io_frame, io_mu, io_sigma);
@@ -129,8 +132,7 @@ void BayesianSegmentation::autoInitEM(const Mat &bird_frame)
 	std::cout << io_mu << " - " << io_sigma << std::endl;
 
 	imshow("mask", mask_frame);
-	imshow("object", io_frame);
-	waitKey(0);*/
+	imshow("object", io_frame);*/
 }
 
 void* BayesianSegmentation::calcProbThread( void* arg )
