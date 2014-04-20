@@ -21,6 +21,8 @@ using namespace std;
 #define EKF_THETA_NOISE		( 1 )
 #define EKF_ACCE_NOISE		( 1 )
 
+#define ekfdt               ( EKF_DELAY_MS / 1000.0 )
+
 // Define for temporal filter
 #define NUM_IN_FRAMES		( 15 )
 #define NUM_OUT_FRAMES		( 15 )

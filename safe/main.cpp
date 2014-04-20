@@ -318,6 +318,7 @@ int main( int argc, char* argv[] ) {
 
 				cv::line( blob_disp, p1, p2, Scalar(255, 255, 0), 5);
 				cv::circle( blob_disp, car_track.objCands[i].Pos, 3, Scalar(255, 0, 0), -1);
+				cv::circle( blob_disp, car_track.objCands[i].filterPos, 3, Scalar(0, 255, 0), -1);
 
 				cv::Point cvtP;
 				car_track.cvtCoord(p1, cvtP, obj_frame);
