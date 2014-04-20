@@ -274,6 +274,10 @@ int main( int argc, char* argv[] ) {
         hmtimer.stop();
 
         /* Printing prints estimates of the angles, not raw */
+        int vp_x, vp_y;
+        vp_x = vp_y = 0;
+        calcVPFromAngles(vp_x, vp_y, gamma.xHat, theta.xHat);
+        if ( PRINT_ANGLES ) std::cout << "VP: " << vp_y << "," << vp_x << std::endl;
         if ( PRINT_ANGLES ) std::cout << "ANGLE: " << theta.xHat << "," << gamma.xHat << std::endl;
 
         //** Calculate homog. intensity feature frame mu and sigma
