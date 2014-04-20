@@ -9,13 +9,14 @@
 #include "homography.hpp"
 #include "bayesSeg.hpp"
 #include "carTracking.hpp"
-#include "sdla.hpp"
+#include "EKF.hpp"
+#include "sdla.h"
 #include <opencv2/opencv.hpp>
 #include <string>
 #include <cmath>
 
 // Pause after processing each frame
-#define SINGLE_STEP             true
+#define SINGLE_STEP             false
 
 #define PRINT_TIMES             true
 #define PRINT_VP                false
@@ -329,6 +330,7 @@ int main( int argc, char* argv[] ) {
 
                 cv::line( blob_disp, p1, p2, cv::Scalar(255, 255, 0), 5);
                 cv::circle( blob_disp, car_track.objCands[i].Pos, 3, cv::Scalar(255, 0, 0), -1);
+                cv::circle( blob_disp, car_track.objCands[i].filterPos, 3, cv::Scalar(0, 255, 0), -1);
 
                 cv::Point cvtP;
                 car_track.cvtCoord(p1, cvtP, obj_frame);
@@ -458,7 +460,7 @@ void init_vp_kalman( cv::KalmanFilter &KF )
     KF.statePre.at<float>(2) = 0;
     KF.statePre.at<float>(3) = 0;
     KF.transitionMatrix = *(cv::Mat_<float>(4, 4) <<
-                    1,      0,      1/kfdt, 0,
+                    1,      0,      1/kfdt,		0,
                     0,      1,      0,      1/kfdt,
                     0,      0,      1,      0,
                     0,      0,      0,      1);
@@ -467,10 +469,10 @@ void init_vp_kalman( cv::KalmanFilter &KF )
     //cv::setIdentity(KF.processNoiseCov, cv::Scalar::all(1e-4));
 
     KF.processNoiseCov = *(cv::Mat_<float>(4, 4) <<
-        pow((float)kfdt, 4)/4.0,    0,                              pow((float)kfdt, 3)/3.0,    0,
-        0,                          pow((float)kfdt, 4)/4.0,        0,                          pow((float)kfdt, 3)/3.0,
-        pow((float)kfdt, 3)/3.0,    0,                              pow((float)kfdt, 2)/2.0,    0,
-        0,                          pow((float)kfdt, 3)/3.0,        0,                          pow((float)kfdt, 2)/2.0);
+        pow((float)kfdt, 4)/4.0,    0,  							pow((float)kfdt, 3)/3.0,    0,
+        0,  						pow((float)kfdt, 4)/4.0,    	0,  						pow((float)kfdt, 3)/3.0,
+        pow((float)kfdt, 3)/3.0,    0,                      		pow((float)kfdt, 2)/2.0,    0,
+        0,  						pow((float)kfdt, 3)/3.0,   		0,  						pow((float)kfdt, 2)/2.0);
     KF.processNoiseCov = KF.processNoiseCov*( PROCESS_NOISE * PROCESS_NOISE );
 
     cv::setIdentity( KF.measurementNoiseCov, cv::Scalar::all( MEAS_NOISE * MEAS_NOISE ) );

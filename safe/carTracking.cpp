@@ -340,12 +340,12 @@ inline void CarTracking::initExtendKalman(int objCandIdx)
 		0, 0, 0, 0, 0, 0,
 		0, 0, 0, 0, 0, 0,
 		0, 0, 0, 0, 0, 0,
-		0, 0, 0, 0, 1.0f, 0.5f,
-		0, 0, 0, 0, 0.5f, 1.0f);
+		0, 0, 0, 0, 0.005f, 0,
+		0, 0, 0, 0, 0, 0.005f);
 
 	objCands[objCandIdx].EKF.measurementNoiseCov = (Mat_<float>(EKF_MEAS, EKF_MEAS) << 
-		1000.0f, 500.0f,
-		500.0f, 500.0f);
+		500.0f, 50.0f,
+		50.0f, 500.0f);
 
 	//objCands[objCandIdx].EKF.measurementNoiseCov = objCands[objCandIdx].EKF.measurementNoiseCov * 200;
 	// Initialize A
