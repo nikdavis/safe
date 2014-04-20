@@ -1,14 +1,13 @@
 CC = g++
 OUTPUT = safe
-CFLAGS = -Wall
-OCVFLAGS = -I/usr/include/flycapture `pkg-config --cflags opencv`
-#IPP directory
-OCVLIBS = -L /opt/intel/composer_xe_2013_sp1.0.061/ipp/lib/intel64
-OCVLIBS += -L /opt/intel/composer_xe_2013_sp1.0.061/compiler/lib/intel64
-OCVLIBS += -lflycapture-c `pkg-config --libs opencv`
+CFLAGS += -Wall
+CFLAGS += `sdl-config --cflags`
+CFLAGS += -I/usr/include/flycapture `pkg-config --cflags opencv`
+LIBS += -lflycapture-c `pkg-config --libs opencv`
+LIBS += `sdl-config --libs`
 
-OBJS  = lmmin.o errorNIETO.o MSAC.o fireflymv_camera.o fsource.o cvwin.o
-OBJS += timer.o homography.o kalman.o bayesSeg.o main.o carTracking.o EKF.o
+OBJS += lmmin.o errorNIETO.o MSAC.o fireflymv_camera.o fsource.o cvwin.o
+OBJS += timer.o homography.o kalman.o bayesSeg.o sdla.o carTracking.o EKF.o main.o
 
 default : CFLAGS += -O3
 default : $(OUTPUT)
@@ -19,46 +18,49 @@ debug : $(OUTPUT)
 all: ${OUTPUT}
 
 $(OUTPUT) : $(OBJS)
-	$(CC) -o $(OUTPUT) $(OBJS) $(OCVLIBS)
+	$(CC) -o $(OUTPUT) $(OBJS) $(LIBS)
 
-main.o : main.cpp defs.hpp fsource.hpp timer.hpp cvwin.hpp MSAC.hpp bayesSeg.hpp
-	$(CC) $(OCVFLAGS) $(CFLAGS) -c main.cpp
+main.o : main.cpp sdla.hpp defs.hpp fsource.hpp timer.hpp cvwin.hpp MSAC.hpp bayesSeg.hpp
+	$(CC) $(CFLAGS) -c main.cpp
+
+sdla.o : sdla.cpp sdla.hpp
+	$(CC) $(CFLAGS) -c sdla.cpp
 
 homography.o: homography.cpp homography.hpp
-	$(CC) $(OCVFLAGS) $(CFLAGS) -c homography.cpp
+	$(CC) $(CFLAGS) -c homography.cpp
 
 timer.o : timer.cpp timer.hpp
-	$(CC) $(OCVFLAGS) $(CFLAGS) -c timer.cpp
+	$(CC) $(CFLAGS) -c timer.cpp
 	
 kalman.o : kalman.cpp kalman.hpp
-	$(CC) $(OCVFLAGS) $(CFLAGS) -c kalman.cpp
+	$(CC) $(CFLAGS) -c kalman.cpp
 
 cvwin.o : cvwin.cpp defs.hpp cvwin.hpp
-	$(CC) $(OCVFLAGS) $(CFLAGS) -c cvwin.cpp
+	$(CC) $(CFLAGS) -c cvwin.cpp
 
 fsource.o : fsource.cpp defs.hpp fsource.hpp fireflymv_camera.hpp
-	$(CC) $(OCVFLAGS) $(CFLAGS) -c fsource.cpp
+	$(CC) $(CFLAGS) -c fsource.cpp
 
 fireflymv_camera.o : fireflymv_camera.cpp defs.hpp fireflymv_camera.hpp
-	$(CC) $(OCVFLAGS) $(CFLAGS) -c fireflymv_camera.cpp
+	$(CC) $(CFLAGS) -c fireflymv_camera.cpp
 
 MSAC.o : MSAC.cpp defs.hpp MSAC.hpp errorNIETO.hpp
-	$(CC) $(OCVFLAGS) $(CFLAGS) -c MSAC.cpp
+	$(CC) $(CFLAGS) -c MSAC.cpp
 
 errorNIETO.o : errorNIETO.cpp errorNIETO.hpp
-	$(CC) $(OCVFLAGS) $(CFLAGS) -c errorNIETO.cpp
+	$(CC) $(CFLAGS) -c errorNIETO.cpp
 
 lmmin.o : lmmin.c lmmin.h lmstruct.h
-	$(CC) $(OCVFLAGS) $(CFLAGS) -c lmmin.c
+	$(CC) $(CFLAGS) -c lmmin.c
 
 bayesSeg.o : bayesSeg.cpp bayesSeg.hpp
-	$(CC) $(OCVFLAGS) $(CFLAGS) -c bayesSeg.cpp
-	
+	$(CC) $(CFLAGS) -c bayesSeg.cpp
+
 carTracking.o : carTracking.cpp carTracking.hpp
-	$(CC) $(OCVFLAGS) $(CFLAGS) -c carTracking.cpp
-	
+	$(CC) $(CFLAGS) -c carTracking.cpp
+
 EKF.o : EKF.cpp EKF.hpp
-	$(CC) $(OCVFLAGS) $(CFLAGS) -c EKF.cpp
+	$(CC) $(CFLAGS) -c EKF.cpp
 
 clean:
 	rm -f *.o $(OUTPUT)
