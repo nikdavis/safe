@@ -8,6 +8,7 @@
 #include "kalman.hpp"
 #include "homography.hpp"
 #include "bayesSeg.hpp"
+#include "sdla.hpp"
 #include <opencv2/opencv.hpp>
 #include <string>
 #include <cmath>
@@ -41,6 +42,7 @@ cv::Mat distCoeffMat = cv::Mat(5, 1, CV_64F, distCoeffData).clone();
 
 
 int main( int argc, char* argv[] ) {
+    sdla audio( "boop.wav" );
     int undist = 1;
     cvwin win_a( "frame" );
     cvwin win_b( "bird_frame" );
