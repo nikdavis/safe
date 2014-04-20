@@ -16,6 +16,7 @@
 
 // Pause after processing each frame
 #define SINGLE_STEP             true
+#define MOTORCYCLE              true
 
 #define PRINT_TIMES             true
 #define PRINT_VP                false
@@ -40,6 +41,7 @@ cv::Mat distCoeffMat = cv::Mat(5, 1, CV_64F, distCoeffData).clone();
 
 
 int main( int argc, char* argv[] ) {
+    bool motorcycle = MOTORCYCLE;
     srand(0); // Force consistent results on reruns
 
     sdla alarm( "boop.wav" );
@@ -66,8 +68,17 @@ int main( int argc, char* argv[] ) {
     cv::Mat frame_raw, frame, lmf_frame, hough_frame, bird_frame, obj_frame;
     MSAC msac;
     cv::Size image_size;
-    Kalman1D theta(-7.0, 0.05, 0.00005);       /* Kalman filters for Theta, Gamma */
-    Kalman1D gamma(1.5, 0.01, 0.00005);        /* init val, measure var, proc var */
+    double gammaInit, thetaInit;
+    if(motorcycle) {
+        thetaInit = -2.635;
+        gammaInit = 1.124;
+    } else {
+        thetaInit = -7.0;
+        gammaInit = 1.5;
+    }
+
+    Kalman1D theta(thetaInit, 0.05, 0.00005);       /* Kalman filters for Theta, Gamma */
+    Kalman1D gamma(gammaInit, 0.01, 0.00005);        /* init val, measure var, proc var */
     float prev_mu, prev_sigma;
     BayesianSegmentation    bayes_seg;
     CarTracking             car_track;

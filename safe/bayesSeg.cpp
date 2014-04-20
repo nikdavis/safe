@@ -124,7 +124,7 @@ void BayesianSegmentation::autoInitEM(const Mat &bird_frame)
 	//miuInit(100, 210, 30, UNDEF_DEFAULT_MIU);
 	sigmaInit( ip_sigma, il_sigma, io_sigma, UNDEF_DEFAULT_SIGMA );
 	miuInit( ip_mu, il_mu, io_mu, UNDEF_DEFAULT_MIU );
-	probPLOUInit(0.45, 0.10, 0.40, 0.5);
+	probPLOUInit(0.45, 0.10, 0.40, 0.05);
 	calcProb();
 
 	/*std::cout << ip_mu << " - " << ip_sigma << std::endl;
