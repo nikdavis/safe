@@ -8,14 +8,6 @@
 using namespace cv;
 using namespace std;
 
-// LUT for the number of consecutive frames to
-// consider object is out of frame
-int CarTracking::numOutFrs[6] = { 10, 15, 25, 35, 45, 60 };
-
-// LUT for the size of bounding box for objects
-int CarTracking::boxSize[17] = { 45, 50, 55, 60, 65, 70, 75, 82, 89, 96, 111, 108, 115, 124, 133, 144, 155 };
-
-
 CarTracking::CarTracking(void)
 {
 	// Intialize parameters for simple blob detection
@@ -24,8 +16,8 @@ CarTracking::CarTracking(void)
 	params.thresholdStep = 5;
 
 	params.minArea = MIN_BLOB_AREA;
-	params.minConvexity = 0.3f;			// ????
-	params.minInertiaRatio = 0.01f;		// ????
+	params.minConvexity = 0.3f;				// ????
+	params.minInertiaRatio = 0.01f;			// ????
 
 	params.maxArea = MAX_BLOB_AREA;
 	params.maxConvexity = 10.0f;			// ????
@@ -160,9 +152,8 @@ inline void CarTracking::updateInObjCand(int idx, Point2f Pt)
 
 		// Convert position from Mat format to Point format
 		objCands[idx].prev_filterPos = objCands[idx].filterPos;
-		objCands[idx].filterPos = Point2f(measurement.at<float>(0), measurement.at<float>(1));
-		//cout << "x: " << estimated.at<float>(0) << "-y: " << estimated.at<float>(1) << "-theta: " << estimated.at<float>(2);
-		//cout << "-v: " << estimated.at<float>(3) << "-phi: " << estimated.at<float>(4) << "-a: " << estimated.at<float>(5) << endl;
+		//objCands[idx].filterPos = Point2f(measurement.at<float>(0), measurement.at<float>(1));
+		objCands[idx].filterPos = Point2f(estimated.at<float>(0), estimated.at<float>(1));
 
         Point posdelta = objCands[idx].filterPos - objCands[idx].prev_filterPos;
         measurement(0) = posdelta.x;
@@ -170,8 +161,7 @@ inline void CarTracking::updateInObjCand(int idx, Point2f Pt)
         estimated = objCands[idx].veloKF.correct(measurement);
 		objCands[idx].filterVelo = Point2f(estimated.at<float>(0), estimated.at<float>(1));
 
-		fittingLine(idx);
-		//cout << "vx: " << objCands[idx].direction(0) << " - vy: " << objCands[idx].direction(1) << " - x0: " << objCands[idx].direction(2) << " - y0: " << objCands[idx].direction(3) << endl;
+		//fittingLine(idx);
 	}
 	else	// If an object is not appeared long enough.
 	{
@@ -200,14 +190,19 @@ inline void CarTracking::updateOutObjCand(void)
 {
 	for (unsigned int i = 0; i < objCands.size(); i++)
 	{
-		// an object is not match, it means that this object is not close
+		// An object is not match, it means that this object is not close
 		// to any old object
 		if (!objCands[i].match)
 		{
+			//
 			// Even though the object does not appear in some frames, it is still need
 			// to update the Kalman filter if it is still in the filter.
 			// In this case, there is no measurement data. Therefore, there is no correction
 			// step, and the filter position is the predict position.
+			//
+			// For the KF for velocity, this KF measurement values are fed from the differential 
+			// positions in EKF. Therefore, the KF for velocity always has measurement values.
+			//
 			if (objCands[i].inFilter)
 			{
 				// Predict the next position
@@ -217,8 +212,20 @@ inline void CarTracking::updateOutObjCand(void)
 				// Convert position from Mat format to Point format
 				objCands[i].filterPos = Point2f(prediction.at<float>(0), prediction.at<float>(1));
 				
-				fittingLine(i);
-				//cout << "vx: " << objCands[i].direction(0) << " - vy: " << objCands[i].direction(1) << " - x0: " << objCands[i].direction(2) << " - y0: " << objCands[i].direction(3) << endl;
+				// Update for veloKF
+				objCands[i].veloKF.predict();
+				
+				Mat_<float> measurement(2, 1);
+				objCands[i].prev_filterPos = objCands[i].filterPos;
+				Point posdelta = objCands[i].filterPos - objCands[i].prev_filterPos;
+        		measurement(0) = posdelta.x;
+        		measurement(1) = posdelta.y;
+        		
+        		Mat_<float> estimated;
+        		estimated = objCands[i].veloKF.correct(measurement);
+				objCands[i].filterVelo = Point2f(estimated.at<float>(0), estimated.at<float>(1));
+				
+				//fittingLine(i);
 			}
 
 			objCands[i].inFrs -= 1;
@@ -244,11 +251,15 @@ inline void  CarTracking::fittingLine(int idx)
 		objCands[idx].posList.push_back(p);
 		if (objCands[idx].posList.size() > POS_LIST_LENGTH)
 			objCands[idx].posList.erase(objCands[idx].posList.begin());
-			
-		fitLine(objCands[idx].posList, objCands[idx].direction, CV_DIST_L2, 0, 0.01, 0.01);
-		//cout << "vx: " << objCands[idx].direction(0) << " - vy: " << objCands[idx].direction(1) << endl;
+		else if (objCands[idx].posList.size() == 1)
+		{
+			Point p1(objCands[idx].filterPos.x, objCands[idx].filterPos.y + objCands[idx].frCount * 5 + 10);
+			objCands[idx].posList.push_back(p1);
+		}
 		
-		if (idx == 0)
+		fitLine(objCands[idx].posList, objCands[idx].direction, CV_DIST_L2, 0, 0.01, 0.01);
+		
+		/*if (idx == 0)
 		{
 			ofstream fout;
 			//fout.open("position.csv");
@@ -261,10 +272,13 @@ inline void  CarTracking::fittingLine(int idx)
 			fout << objCands[idx].filterPos.x << "," << objCands[idx].filterPos.y << ",";
 			fout << objCands[idx].direction(0) << "," << objCands[idx].direction(1) << endl;
 			fout.close();
-		}
+		}*/
 	}	
 }
 
+/* This function will convert to coordinate of a point from top left original 
+ * to bottom middle point.
+ */
 void CarTracking::cvtCoord(const Point2f &orig, Point2f &cvt, const Mat &img)
 {
 	cvt.x = orig.x - ( img.cols / 2.0 );
@@ -354,10 +368,9 @@ inline void CarTracking::initExtendKalman(int objCandIdx)
 		0, 0, 0, 0, 0, 0.005f);
 
 	objCands[objCandIdx].EKF.measurementNoiseCov = (Mat_<float>(EKF_MEAS, EKF_MEAS) << 
-		500.0f, 50.0f,
-		50.0f, 500.0f);
+		200.0f, 50.0f,
+		50.0f, 200.0f);
 
-	//objCands[objCandIdx].EKF.measurementNoiseCov = objCands[objCandIdx].EKF.measurementNoiseCov * 200;
 	// Initialize A
 	objCands[objCandIdx].EKF.calJacobian();
 

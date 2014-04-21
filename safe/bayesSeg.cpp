@@ -102,8 +102,8 @@ void BayesianSegmentation::autoInitEM(const Mat &bird_frame)
     // Removed and replaced with this test
 	if (il_mu == 0)
 	{
-		io_mu = 240;
-		io_sigma = 10;
+		il_mu = 240;
+		il_sigma = 10;
 	}
 
 	cv::threshold(bird_frame, io_frame, ip_mu - ip_sigma, 255, CV_THRESH_TOZERO_INV);
@@ -126,13 +126,6 @@ void BayesianSegmentation::autoInitEM(const Mat &bird_frame)
 	miuInit( ip_mu, il_mu, io_mu, UNDEF_DEFAULT_MIU );
 	probPLOUInit(0.45, 0.10, 0.40, 0.05);
 	calcProb();
-
-	/*std::cout << ip_mu << " - " << ip_sigma << std::endl;
-	std::cout << il_mu << " - " << il_sigma << std::endl;
-	std::cout << io_mu << " - " << io_sigma << std::endl;
-
-	imshow("mask", mask_frame);
-	imshow("object", io_frame);*/
 }
 
 void* BayesianSegmentation::calcProbThread( void* arg )
