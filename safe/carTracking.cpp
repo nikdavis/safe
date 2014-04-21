@@ -154,12 +154,12 @@ inline void CarTracking::updateInObjCand(int idx, Point2f Pt)
 		objCands[idx].filterPos = Point2f(measurement.at<float>(0), measurement.at<float>(1));
 
         Point posdelta = objCands[idx].filterPos - objCands[idx].prev_filterPos;
-        if ( posdelta.x > ( 0.0802105 * 8 ) ) posdelta.x = ( 0.0802105 * 8 );
-        if ( posdelta.y > ( 0.0802105 * 8 ) ) posdelta.y = ( 0.0802105 * 8 );
+        if ( fabs( posdelta.x - objCands[idx].prev_posDelta.x ) > ( 0.0802105 * 8 ) ) posdelta.x = objCands[idx].prev_posDelta.x;
+        if ( fabs( posdelta.y - objCands[idx].prev_posDelta.y ) > ( 0.0802105 * 8 ) ) posdelta.y = objCands[idx].prev_posDelta.y;
+        objCands[idx].prev_posDelta = posdelta;
         measurement(0) = posdelta.x;
         measurement(1) = posdelta.y;
         estimated = objCands[idx].veloKF.correct(measurement);
-        objCands[idx].prev_filterVelo = objCands[idx].filterVelo;
 		objCands[idx].filterVelo = Point2f(estimated.at<float>(0), estimated.at<float>(1));
 
 		//fittingLine(idx);

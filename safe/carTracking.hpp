@@ -43,7 +43,7 @@ private:
 					filterPos(cv::Point2f(0,0)),
 					prev_filterPos(cv::Point2f(0,0)),
                     filterVelo(cv::Point2f(0,0)),
-                    prev_filterVelo(cv::Point2f(0,0)),
+                    prev_posDelta(cv::Point2f(0,0)),
 					c(0),
 					frCount(0),
                     veloKF(4, 2, 0),
@@ -57,7 +57,7 @@ private:
 		cv::Point2f				filterPos;
         cv::Point2f       		prev_filterPos;
         cv::Point2f       		filterVelo;
-        cv::Point2f             prev_filterVelo;
+        cv::Point2f             prev_posDelta;
 		int						c;
 		int 					frCount;
 		ExtendedKalmanFilter	EKF;
