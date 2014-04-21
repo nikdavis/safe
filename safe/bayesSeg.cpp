@@ -96,25 +96,25 @@ void BayesianSegmentation::autoInitEM(const Mat &bird_frame)
 	mean_stddev(ip_frame, ip_mu, ip_sigma);
 
     // Adjustment loop was causing infinite loop in homog failure mode (bad angles)
-	cv::threshold(bird_frame, il_frame, ip_mu + ip_sigma, 255, CV_THRESH_TOZERO);
+	cv::threshold(bird_frame, il_frame, ip_mu + 50, 255, CV_THRESH_TOZERO);
 	mean_stddev(il_frame, il_mu, il_sigma);
 
     // Removed and replaced with this test
-	if (il_mu == 0)
+	if (il_mu < 0.1)
 	{
-		io_mu = 240;
-		io_sigma = 10;
+		il_mu = 180;
+		il_sigma = 10;
 	}
 
-	cv::threshold(bird_frame, io_frame, ip_mu - ip_sigma, 255, CV_THRESH_TOZERO_INV);
+	cv::threshold(bird_frame, io_frame, ip_mu - 50, 255, CV_THRESH_TOZERO_INV);
 	mean_stddev(io_frame, io_mu, io_sigma);
 
-	if (io_mu == 0)
+	if (io_mu < 0.1)
 	{
-		io_mu = 15;
+		io_mu = 5;
 	}
 	
-	if (io_sigma == 0)
+	if (io_sigma < 0.1)
 	{
 		io_sigma = 10;
 	}
@@ -127,11 +127,11 @@ void BayesianSegmentation::autoInitEM(const Mat &bird_frame)
 	probPLOUInit(0.45, 0.10, 0.40, 0.05);
 	calcProb();
 
-	/*std::cout << ip_mu << " - " << ip_sigma << std::endl;
+	std::cout << ip_mu << " - " << ip_sigma << std::endl;
 	std::cout << il_mu << " - " << il_sigma << std::endl;
 	std::cout << io_mu << " - " << io_sigma << std::endl;
 
-	imshow("mask", mask_frame);
+	/*imshow("mask", mask_frame);
 	imshow("object", io_frame);*/
 }
 
@@ -343,7 +343,7 @@ void BayesianSegmentation::EM_Bayes( const Mat &img )
     	sigma.O = 5.0f;
     }
     	
-    //std::cout << "EM update: " << miu.O << " - " << sigma.O << std::endl;
+    std::cout << "EM update: " << miu.O << " - " << sigma.O << std::endl;
 }
 
 void BayesianSegmentation::sigmaInit( double sigmaP, double sigmaL, double sigmaO, double sigmaU )
@@ -372,7 +372,18 @@ void BayesianSegmentation::probPLOUInit( double probP, double probL, double prob
 
 void BayesianSegmentation::classSeg( const Mat &img, Mat &obj, e_class cl ) const
 {
-    switch ( cl )
+	Mat temp = probPLOU_X.probP_X.clone();
+	threshold( probPLOU_X.probP_X, temp, 0.20, 1 , CV_THRESH_BINARY_INV );
+
+	multiply(probPLOU_X.probO_X, temp, probPLOU_X.probO_X);
+
+	threshold( probPLOU_X.probL_X, temp, 0.10, 1	 , CV_THRESH_BINARY_INV );
+	multiply(probPLOU_X.probO_X, temp, probPLOU_X.probO_X);
+
+	threshold( probPLOU_X.probO_X, probPLOU_X.probO_X, PROB_THRESHOLD, 255, CV_THRESH_BINARY );
+	LUT( img, probPLOU_X.probO_X, obj );
+
+    /*switch ( cl )
     {
     case PAVE:
         threshold( probPLOU_X.probP_X, probPLOU_X.probP_X, PROB_THRESHOLD, 255, CV_THRESH_BINARY );
@@ -390,7 +401,7 @@ void BayesianSegmentation::classSeg( const Mat &img, Mat &obj, e_class cl ) cons
         threshold( probPLOU_X.probU_X, probPLOU_X.probU_X, PROB_THRESHOLD, 255, CV_THRESH_BINARY );
         LUT( img, probPLOU_X.probU_X, obj );
         break;
-    }
+    }*/
 
     // Normalize the obj image to grayscale
     obj.convertTo(obj, CV_8U);

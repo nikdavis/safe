@@ -348,6 +348,26 @@ int main( int argc, char* argv[] ) {
                 std::cout << "Object[" << i << "] x: " << feetPos.x << " y: " << feetPos.y
                           << " xv: " << car_track.objCands[i].filterVelo.x
                           << " yv: " << car_track.objCands[i].filterVelo.y << std::endl;
+		
+		char zBuffer[35];
+                int baseline=0;  
+                snprintf(zBuffer, 35, "%f - %f", car_track.objCands[i].filterVelo.x, car_track.objCands[i].filterVelo.y);
+                cv::Size textSize = cv::getTextSize(zBuffer, CV_FONT_HERSHEY_COMPLEX, 0.55, 1, &baseline);  
+                
+                // center the text
+		cv::Point textOrg((car_track.objCands[i].filterPos.x - textSize.width/2), 
+					  (car_track.objCands[i].filterPos.y - textSize.height/2 - 4));
+		cv::putText( blob_disp, zBuffer, textOrg, 
+					CV_FONT_HERSHEY_COMPLEX, 0.55, cv::Scalar(255, 255, 0));
+
+                snprintf(zBuffer, 35, "%f - %f", car_track.objCands[i].filterPos.x, car_track.objCands[i].filterPos.y);
+                
+                // center the text
+		cv::Point textOrg1((car_track.objCands[i].filterPos.x - textSize.width/2), 
+					  (car_track.objCands[i].filterPos.y + textSize.height/2 + 4));
+		cv::putText( blob_disp, zBuffer, textOrg1, 
+					CV_FONT_HERSHEY_COMPLEX, 0.55, cv::Scalar(255, 255, 0));
+
 
                 // http://www.michigan.gov/documents/msp/BrakeTesting-MSP_VehicleEval08_Web_221473_7.pdf
                 // Average was 26.86ft/s^2 or about 8 m/s^2 braking acceleration
@@ -363,7 +383,9 @@ int main( int argc, char* argv[] ) {
                     //vy *= some conversion factor;
                     float stopdist = ( vy * vy ) / ( 2.0 * 6.0 );
                     float dist = 480 - car_track.objCands[i].filterPos.y;
-                    if ( stopdist > dist ) {
+        
+
+            if ( stopdist > dist ) {
                         // Alert user of potential hazard
                        // TODO: Setup leveled response, deal with priority properly
                         std::cout << "ALERT!" << std::endl;
