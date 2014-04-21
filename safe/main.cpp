@@ -14,15 +14,18 @@
 #include <string>
 #include <cmath>
 #include <fstream>
+#include <string>
 
 // Pause after processing each frame
 #define SINGLE_STEP             false
+#define MOTORCYCLE              true
 
 #define PRINT_TIMES             true
 #define PRINT_VP                false
 #define PRINT_ANGLES            true
 #define PRINT_STATS             true
 
+inline bool saveImg(const cv::Mat &img, std::string fileNameFormat, int fileNum);
 inline void lane_marker_filter( const cv::Mat &src, cv::Mat &dst );
 inline void show_hough( cv::Mat &dst, const std::vector<cv::Vec4i> lines );
 inline bool calc_intersect( const cv::Vec4f l1, const cv::Vec4f l2,
@@ -41,6 +44,7 @@ cv::Mat distCoeffMat = cv::Mat(5, 1, CV_64F, distCoeffData).clone();
 
 
 int main( int argc, char* argv[] ) {
+    bool motorcycle = MOTORCYCLE;
     srand(0); // Force consistent results on reruns
 
     sdla alarm( "boop.wav" );
@@ -67,8 +71,17 @@ int main( int argc, char* argv[] ) {
     cv::Mat frame_raw, frame, lmf_frame, hough_frame, bird_frame, obj_frame;
     MSAC msac;
     cv::Size image_size;
-    Kalman1D theta(-7.0, 0.05f, 0.0005f);       /* Kalman filters for Theta, Gamma */
-    Kalman1D gamma(1.5, 0.05f, 0.0005f);        /* init val, measure var, proc var */
+    double gammaInit, thetaInit;
+    if(motorcycle) {
+        thetaInit = -2.635;
+        gammaInit = 1.124;
+    } else {
+        thetaInit = -7.0;
+        gammaInit = 1.5;
+    }
+
+    Kalman1D theta(thetaInit, 0.05f, 0.00005f);       /* Kalman filters for Theta, Gamma */
+    Kalman1D gamma(gammaInit, 0.05f, 0.00005f);        /* init val, measure var, proc var */
     float prev_mu, prev_sigma;
     BayesianSegmentation    bayes_seg;
     CarTracking             car_track;
@@ -137,9 +150,10 @@ int main( int argc, char* argv[] ) {
     lmf_frame = cv::Mat::zeros( image_size.height, image_size.width, CV_8UC1 );
 
     // Request and process frames until source indicates EOF
+    int frame_count = 0;
     while ( fsrc->get_frame( frame_raw ) == 0 ) {
         ptimer.start();
-
+		frame_count++;
         /* Explicitly undistorting our FireflyMV camera */
 
         utimer.start();
@@ -267,7 +281,6 @@ int main( int argc, char* argv[] ) {
 		calcVpFromAngles(theta.xHat, gamma.xHat, filter_vp); 
 		cv::circle( hough_frame, filter_vp, 3, cv::Scalar(0, 255, 255 ), 4 );
                         
-
         /* Generate IPM or BIRDS-EYE view with plane-to-plane homography */
         hmtimer.start();
         cv::Mat H;
@@ -302,11 +315,17 @@ int main( int argc, char* argv[] ) {
 
         //** Create object image
         bayes_seg.classSeg( bird_frame, obj_frame, OBJ );
+        
+        //saveImg( obj_frame, "./frame/obj_frame", frame_count);
 
         //** Perform opening
         cv::Mat kernel = getStructuringElement(cv::MORPH_RECT, cv::Size(5, 5));
-        morphologyEx(obj_frame, obj_frame, cv::MORPH_OPEN, kernel);
-
+        cv::morphologyEx(obj_frame, obj_frame, cv::MORPH_OPEN, kernel);
+		//cv::erode(obj_frame, obj_frame, kernel);
+		//saveImg( obj_frame, "./frame/erode_frame", frame_count);
+		//cv::dilate(obj_frame, obj_frame, kernel);
+		//saveImg( obj_frame, "./frame/dilate_frame", frame_count);
+		
         //** Perform blob detection then passing object candidates through
         // temporal filter. Only blobs that show up in a certain consecutive
         // frame are considered as cars. And only cars are passed through 
@@ -500,6 +519,32 @@ inline bool calc_intersect( const cv::Vec4f l1, const cv::Vec4f l2,
     intersect.x = ( c2 - c1 ) / ( m1 - m2 );
     intersect.y = ( m1 * intersect.x ) + c1;
     return true;
+}
+
+inline bool saveImg(const cv::Mat &img, std::string fileNameFormat, int fileNum)
+{
+	cv::Mat save;
+	if (img.channels() == 3)
+		cv::cvtColor(img, save, CV_RGB2GRAY);
+	else if (img.channels() == 4)
+		cv::cvtColor(img, save, CV_RGBA2GRAY);
+	else
+		save = img.clone();
+	// Save image as pgm
+	std::vector< int > compression_params;			//vector that stores the compression parameters of the image
+	compression_params.push_back(CV_IMWRITE_PXM_BINARY);
+	compression_params.push_back(9);
+	std::string sFileNum = static_cast<std::ostringstream*>(&(std::ostringstream() << fileNum))->str();
+	std::string sFileName = fileNameFormat;
+	if (fileNum < 10)
+		sFileName += ("_000" + sFileNum + ".pgm");
+	else if ((fileNum >= 10) && (fileNum < 100))
+		sFileName += ("_00" + sFileNum + ".pgm");
+	else if ((fileNum >= 100) && (fileNum < 1000))
+		sFileName += ("_0" + sFileNum + ".pgm");
+	else
+		sFileName += ("_" + sFileNum + ".pgm");
+	return cv::imwrite(sFileName, save, compression_params);
 }
 
 
