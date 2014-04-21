@@ -2,18 +2,13 @@
 
 #include "sdla.hpp"
 #include "SDL.h"
+#include "defs.hpp"
 #include <iostream>
 #include <csignal>
 #include <sys/time.h>
 #include <cmath>
 
 #define PI 3.14159265
-
-#ifdef DEBUG
-#define DMESG( v ) do { std::cout << v << std::endl; } while ( false )
-#else
-#define DMESG( v ) do { } while ( false )
-#endif
 
 #define LBYTE( word )   ( ( word ) & 0x00FF )
 #define HBYTE( word ) ( ( ( word ) & 0xFF00 ) >> 8 )
@@ -46,7 +41,6 @@ void timer_callback( int signal ) {
 
 void sdla::set_interval( int sec, int msec ) {
     if ( !_isvalid ) return;
-    DMESG( "slda: Setting interval to [s,ms]:\t" << sec << ",\t" << msec );
 
     int usec = msec * 1000;
     itimer.it_interval.tv_sec = sec;
@@ -109,7 +103,6 @@ void sdla::set_position( float radius, float angle ) {
 
 void sdla::set_position_deg( float radius, int angle ) {
     if ( !_isvalid ) return;
-    DMESG( "slda: Setting position to [r, a]:\t" << radius << "'\t" << angle );
     set_position( radius, angle * ( PI / 180.0 ) );
 }
 
