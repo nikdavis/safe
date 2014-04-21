@@ -127,11 +127,11 @@ void BayesianSegmentation::autoInitEM(const Mat &bird_frame)
 	probPLOUInit(0.45, 0.10, 0.40, 0.05);
 	calcProb();
 
-	std::cout << ip_mu << " - " << ip_sigma << std::endl;
+	/*std::cout << ip_mu << " - " << ip_sigma << std::endl;
 	std::cout << il_mu << " - " << il_sigma << std::endl;
 	std::cout << io_mu << " - " << io_sigma << std::endl;
 
-	/*imshow("mask", mask_frame);
+	imshow("mask", mask_frame);
 	imshow("object", io_frame);*/
 }
 
@@ -343,7 +343,7 @@ void BayesianSegmentation::EM_Bayes( const Mat &img )
     	sigma.O = 5.0f;
     }
     	
-    std::cout << "EM update: " << miu.O << " - " << sigma.O << std::endl;
+    //std::cout << "EM update: " << miu.O << " - " << sigma.O << std::endl;
 }
 
 void BayesianSegmentation::sigmaInit( double sigmaP, double sigmaL, double sigmaO, double sigmaU )

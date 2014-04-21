@@ -13,11 +13,11 @@
 #define ekfdt               ( EKF_DELAY_MS / 1000.0 )
 
 // Define for temporal filter
-#define NUM_IN_FRAMES		( 15 )
-#define NUM_OUT_FRAMES		( 15 )
+#define NUM_IN_FRAMES		( 3 )
+#define NUM_OUT_FRAMES		( 4 )
 #define ERR_BOX_SIZE_PX		( 25 )
 #define MAX_GAP_PX			( 20 )
-#define MIN_BLOB_AREA		( 1500.0f )
+#define MIN_BLOB_AREA		( 5000.0f )
 #define MAX_BLOB_AREA		( 50000.0f )
 #define MIN_BOUND_BOX_EREA	( 1400 )
 #define PX_FEET_SCALE		( 50.0f/330.0f )
@@ -27,13 +27,6 @@
 class CarTracking
 {
 private:
-	// LUT for the number of consecutive frames to
-	// consider object is out of frame
-	static int numOutFrs[6];
-	
-	// LUT for the size of bounding box for objects
-	static int boxSize[17];
-
 	cv::SimpleBlobDetector::Params params;
 
 	/* ---------------------------------------------------------------------------------
@@ -53,22 +46,22 @@ private:
 					c(0),
 					frCount(0),
                     veloKF(4, 2, 0),
-					posList(POS_LIST_LENGTH),
+					posList(),
 					direction(0.0f, 0.0f, 0.0f, 0.0f) {};
-		bool			inFilter;
-		bool			match;			// 
-		int				inFrs;			// Number of consecutive frame to include in the filter
-		int				outFrs;			// Number of consecutive frame to exclude in the filter		
-		cv::Point2f		Pos;			// The Position of ObjCand
-		cv::Point2f		filterPos;
-        cv::Point2f       prev_filterPos;
-        cv::Point2f       filterVelo;
-		int				c;
-		int 			frCount;
+		bool					inFilter;
+		bool					match;			// 
+		int						inFrs;			// Number of consecutive frame to include in the filter
+		int						outFrs;			// Number of consecutive frame to exclude in the filter		
+		cv::Point2f				Pos;			// The Position of ObjCand
+		cv::Point2f				filterPos;
+        cv::Point2f       		prev_filterPos;
+        cv::Point2f       		filterVelo;
+		int						c;
+		int 					frCount;
 		ExtendedKalmanFilter	EKF;
-        cv::KalmanFilter veloKF;
+        cv::KalmanFilter 		veloKF;
 		std::vector<cv::Point>	posList;
-		cv::Vec4f			direction;
+		cv::Vec4f				direction;
 	} ObjCand;
 	
 	cv::SimpleBlobDetector *blob_detector;

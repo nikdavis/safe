@@ -10,18 +10,7 @@
 #include <cmath>
 #include <iostream>
 
-/* We want to move up away from the road, so intuition says
- * we want a positive Y translation. But Y gets mapped to
- * Z, so we translate positive Z. Or something like that. */
-/* This is "in pixels" which are relative to the image sensor size */
-#define X_TRANSLATION	(0)
-#define Y_TRANSLATION	(35)
-#define Z_TRANSLATION	(270)
-#define CAM_RES_Y		(480)
-#define CAM_RES_X		(640)
-#define FOCAL_IN_PX		(378)
-#define OUTPUT_SIZE_X	(416)
-#define OUTPUT_SIZE_Y	(480)
+
 
 /* NOTE: should really substitute camera calibration matrix in for
  * focal length, and center (CAM_RES_X, CAM_RES_Y). Will do that soon.
@@ -52,11 +41,45 @@ void calcAnglesFromVP(cv::Mat &vp, float &theta, float &gamma) {
 	//std::cout << vpCamCoord << std::endl;
 	theta = atan( vpCamCoord.at<float>(1,0) );
 	gamma = atan( - vpCamCoord.at<float>(0,0) / cos(theta) );
+	
 	/* To degrees */
 	theta = theta * 180.0 / CV_PI;
 	gamma = gamma * 180.0 / CV_PI;
-	//std::cout << "theta: " << theta << std::endl;
-	//std::cout << "gamma: " << gamma << std::endl;
+}
+
+void calcVpFromAngles(const float &theta, const float &gamma, cv::Point &vp)
+{
+	float ftheta = theta * CV_PI / 180.0f;	
+	float fgamma = gamma * CV_PI / 180.0f;
+		
+	cv::Mat vpCamCoord(3, 1, CV_32FC1);
+	vpCamCoord.at<float>(0,0) = -tan(fgamma)*cos(ftheta);
+	vpCamCoord.at<float>(1,0) = tan(ftheta);
+	vpCamCoord.at<float>(2,0) = 1.0f;
+	
+	cv::Mat vpMat = K * vpCamCoord;
+	
+	vp.x = cvRound(vpMat.at<float>(0,0));
+	vp.y = cvRound(vpMat.at<float>(1,0));
+}
+
+
+void calcVPFromAngles(int &x, int &y, float gamma, float theta) {
+	float ga, th;
+    cv::Mat vpCam = cv::Mat::zeros( 3, 1, CV_32FC1);
+	ga = gamma * CV_PI / 180.0;
+	th = theta * CV_PI / 180.0;
+	ga = - tan( ga ) * cos( th );
+	th = tan ( th );
+	vpCam.at<float>(0,0) = ga;
+	vpCam.at<float>(1,0) = th;
+	vpCam.at<float>(2,0) = 1;
+    cv::Mat vpPix = K * vpCam;
+	ga = vpPix.at<float>(0,0);
+	th = vpPix.at<float>(1,0);
+    std::cout << ga << "," << th << std::endl;
+	x = (int)5;
+	y = (int)5;
 }
 
 void planeToPlaneHomog(cv::Mat &in, cv::Mat &out, cv::Mat &H, int outputWidth) {

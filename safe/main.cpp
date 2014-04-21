@@ -13,16 +13,23 @@
 #include <opencv2/opencv.hpp>
 #include <string>
 #include <cmath>
+#include <fstream>
+#include <string>
 
 // Pause after processing each frame
 #define SINGLE_STEP             true
 #define MOTORCYCLE              true
 
-#define PRINT_TIMES             true
+#define PRINT_TIMES             false
 #define PRINT_VP                false
-#define PRINT_ANGLES            true
-#define PRINT_STATS             true
+#define PRINT_ANGLES            false
+#define PRINT_STATS             false
 
+#define FRAME_SKIP_COUNT        0
+#define FPS                     30.0        // Frames per second (5ft/19pxl)
+#define MPP                     0.0802105   // Meters per pixel
+
+inline bool saveImg(const cv::Mat &img, std::string fileNameFormat, int fileNum);
 inline void lane_marker_filter( const cv::Mat &src, cv::Mat &dst );
 inline void show_hough( cv::Mat &dst, const std::vector<cv::Vec4i> lines );
 inline bool calc_intersect( const cv::Vec4f l1, const cv::Vec4f l2,
@@ -46,7 +53,7 @@ int main( int argc, char* argv[] ) {
 
     sdla alarm( "boop.wav" );
 
-    int undist = 1;
+    bool undist = false;
     cvwin win_a( "frame" );
     cvwin win_b( "bird_frame" );
     cvwin win_c( "hough_frame" );
@@ -77,8 +84,8 @@ int main( int argc, char* argv[] ) {
         gammaInit = 1.5;
     }
 
-    Kalman1D theta(thetaInit, 0.05, 0.00005);       /* Kalman filters for Theta, Gamma */
-    Kalman1D gamma(gammaInit, 0.01, 0.00005);        /* init val, measure var, proc var */
+    Kalman1D theta(thetaInit, 0.05f, 0.00005f);       /* Kalman filters for Theta, Gamma */
+    Kalman1D gamma(gammaInit, 0.05f, 0.00005f);        /* init val, measure var, proc var */
     float prev_mu, prev_sigma;
     BayesianSegmentation    bayes_seg;
     CarTracking             car_track;
@@ -147,11 +154,13 @@ int main( int argc, char* argv[] ) {
     lmf_frame = cv::Mat::zeros( image_size.height, image_size.width, CV_8UC1 );
 
     // Request and process frames until source indicates EOF
+    int frame_count = 0;
     while ( fsrc->get_frame( frame_raw ) == 0 ) {
         ptimer.start();
-
+		frame_count++;
         /* Explicitly undistorting our FireflyMV camera */
 
+        /* Explicitly undistorting our FireflyMV camera */
         utimer.start();
         if ( undist ) {
             cv::undistort(frame_raw, frame, cameraMat, distCoeffMat);
@@ -241,22 +250,30 @@ int main( int argc, char* argv[] ) {
                 pvp(0) = _vp.at<float>(0,0);
                 pvp(1) = _vp.at<float>(1,0);
             }
-            /* Convert to units of Kalman filter */
-            calcAnglesFromVP(pvp, thetaAng, gammaAng);
-            /* Only process if the delta is sane */
-            thetaDelta = fabs(thetaAng - theta.xHat);
-            gammaDelta = fabs(gammaAng - gamma.xHat);
-            xdelta = fabs(pvp(0) - prev_x); prev_x = pvp(0);
-            ydelta = fabs(pvp(1) - prev_y); prev_y = pvp(1);
-            if ( thetaDelta < 15.0 && ydelta < 10.0 ) {
-                theta.addMeas(thetaAng);
+            
+            // If the vanishing point is out of the frame, the point is not good.
+            if ((pvp(0) < 2 * frame.cols / 7) || (pvp(0) > 5 * frame.cols / 7) || 
+            	(pvp(1) < 2 * frame.rows / 5) || (pvp(1) > 3 * frame.rows / 5)) {
+            	theta.skipMeas();
+            	gamma.skipMeas();
             } else {
-                theta.skipMeas();
-            }
-            if ( gammaDelta < 25.0 && xdelta < 10.0 ) {
-                gamma.addMeas(gammaAng);
-            } else {
-                gamma.skipMeas();
+		        /* Convert to units of Kalman filter */
+		        calcAnglesFromVP(pvp, thetaAng, gammaAng);
+		        /* Only process if the delta is sane */
+		        thetaDelta = fabs(thetaAng - theta.xHat);
+		        gammaDelta = fabs(gammaAng - gamma.xHat);
+		        xdelta = fabs(pvp(0) - prev_x); prev_x = pvp(0);
+		        ydelta = fabs(pvp(1) - prev_y); prev_y = pvp(1);
+		        if ( thetaDelta < 15.0 && ydelta < 10.0 ) {
+		            theta.addMeas(thetaAng);
+		        } else {
+		            theta.skipMeas();
+		        }
+		        if ( gammaDelta < 25.0 && xdelta < 10.0 ) {
+		            gamma.addMeas(gammaAng);
+		        } else {
+		            gamma.skipMeas();
+		        }
             }
         } else {
             theta.skipMeas();
@@ -265,7 +282,10 @@ int main( int argc, char* argv[] ) {
         ktimer.stop();
         draw_cross( hough_frame, cv::Point( vp(0,0), vp(1,0) ),
                                  cv::Scalar( 0, 255, 0 ), 4 );
-
+		cv::Point filter_vp;
+		calcVpFromAngles(theta.xHat, gamma.xHat, filter_vp); 
+		cv::circle( hough_frame, filter_vp, 3, cv::Scalar(0, 255, 255 ), 4 );
+                        
         /* Generate IPM or BIRDS-EYE view with plane-to-plane homography */
         hmtimer.start();
         cv::Mat H;
@@ -274,13 +294,12 @@ int main( int argc, char* argv[] ) {
         hmtimer.stop();
 
         /* Printing prints estimates of the angles, not raw */
-        if ( PRINT_ANGLES ) std::cout << "ANGLE: " << theta.xHat << "," << gamma.xHat << std::endl;
+        if ( PRINT_ANGLES ) DMESG( "ANGLE: " << theta.xHat << "," << gamma.xHat );
 
         //** Calculate homog. intensity feature frame mu and sigma
         float mu, sigma;        
         bayes_seg.mean_stddev( bird_frame, mu, sigma );
-        if ( PRINT_STATS )
-            std::cout << "MU: " << mu << " SIGMA: " << sigma << std::endl;
+        if ( PRINT_STATS ) DMESG( "MU: " << mu << " SIGMA: " << sigma );
         
         //** If stats significantly different from last frame, reseed EM algor.
         itimer.start();
@@ -300,11 +319,17 @@ int main( int argc, char* argv[] ) {
 
         //** Create object image
         bayes_seg.classSeg( bird_frame, obj_frame, OBJ );
+        
+        //saveImg( obj_frame, "./frame/obj_frame", frame_count);
 
         //** Perform opening
         cv::Mat kernel = getStructuringElement(cv::MORPH_RECT, cv::Size(5, 5));
-        morphologyEx(obj_frame, obj_frame, cv::MORPH_OPEN, kernel);
-
+        cv::morphologyEx(obj_frame, obj_frame, cv::MORPH_OPEN, kernel);
+		//cv::erode(obj_frame, obj_frame, kernel);
+		//saveImg( obj_frame, "./frame/erode_frame", frame_count);
+		//cv::dilate(obj_frame, obj_frame, kernel);
+		//saveImg( obj_frame, "./frame/dilate_frame", frame_count);
+		
         //** Perform blob detection then passing object candidates through
         // temporal filter. Only blobs that show up in a certain consecutive
         // frame are considered as cars. And only cars are passed through 
@@ -331,19 +356,16 @@ int main( int argc, char* argv[] ) {
             // Only cars will be calculated position and direction
             if (car_track.objCands[i].inFilter)
             {
-                // Currently ignoreing EKF, it clearly need absolute velocity to function properly
+                // Currently ignoring EKF, it clearly need absolute velocity to function properly
                 // As is, the EKF is very slow to follow, and exibits odd behavior as it models
-                // a car on he road turning around, etc., as it's relative velocity changes
+                // a car on the road turning around as it's relative velocity jitters
                 cv::circle( blob_disp, car_track.objCands[i].Pos, 3, cv::Scalar(255, 0, 0), -1);
                 cv::circle( blob_disp, car_track.objCands[i].filterPos, 3, cv::Scalar(0, 255, 0), -1);
 
-                cv::Point2f cvtP;
-                car_track.cvtCoord(car_track.objCands[i].filterPos, cvtP, obj_frame);
-                cv::Point2f feetPos((float)cvtP.x*PX_FEET_SCALE, (float)cvtP.y*PX_FEET_SCALE);
-
                 cv::Point2f lstart = car_track.objCands[i].filterPos;
                 cv::Point2f lend = car_track.objCands[i].filterPos + car_track.objCands[i].filterVelo;
-                cv::line( blob_disp, lstart, lend, cv::Scalar(0, 128, 0), 4);
+                cv::line( blob_disp, lstart, lend, cv::Scalar(0, 128, 0), 3);
+                lend *= 1000.0; // Make line seg "infinite" for intersection test
 
                 std::cout << "Object[" << i << "] x: " << feetPos.x << " y: " << feetPos.y
                           << " xv: " << car_track.objCands[i].filterVelo.x
@@ -378,17 +400,14 @@ int main( int argc, char* argv[] ) {
                 if ( calc_intersect( candVec, hitSeg, intersection ) ) {
                     // Intersected with rear of vehicle, check stopping distance
                     // Ignore x velocity, y should be very very dominant
-                    float vy = car_track.objCands[i].filterVelo.y;
-                    //TODO: convert velocity from pixels per frame to meters per second
-                    //vy *= some conversion factor;
-                    float stopdist = ( vy * vy ) / ( 2.0 * 6.0 );
-                    float dist = 480 - car_track.objCands[i].filterPos.y;
-        
-
-            if ( stopdist > dist ) {
+                    // Convert velocity from pixels per frame to meters per second
+                    float vy = car_track.objCands[i].filterVelo.y * MPP * FPS;
+                    float stopdist = ( vy * vy ) / ( 2.0 * 6.0 ); // v^2 / (2*a)
+                    float dist = (480 - car_track.objCands[i].filterPos.y) * MPP;
+                    DMESG( "vy: " << vy << " dist: " << dist << " stopdist: " << stopdist << " XY: " << lstart );
+                    if ( stopdist > dist ) { // Cannot break within distance
                         // Alert user of potential hazard
-                       // TODO: Setup leveled response, deal with priority properly
-                        std::cout << "ALERT!" << std::endl;
+                        std::cout << "\033[22;31mALERT!\e[m" << std::endl;
                         alarming = true;
                         alarm.set_interval( 0, 100 );
                     }
@@ -432,8 +451,8 @@ int main( int argc, char* argv[] ) {
     /* Quit if key is ESC or q */
         if(key == 27 || key == 'q') break;
         else if(key == 'u') {
-            /* u key switches undistortion on/off. default is on. */
-            undist = (undist + 1) % 2;
+            /* u key switches undistortion on/off. default is off. */
+            undist = !undist;
         }
     }
     DMESG( "Done processing frames" );
@@ -519,6 +538,32 @@ inline bool calc_intersect( const cv::Vec4f l1, const cv::Vec4f l2,
     intersect.x = ( c2 - c1 ) / ( m1 - m2 );
     intersect.y = ( m1 * intersect.x ) + c1;
     return true;
+}
+
+inline bool saveImg(const cv::Mat &img, std::string fileNameFormat, int fileNum)
+{
+	cv::Mat save;
+	if (img.channels() == 3)
+		cv::cvtColor(img, save, CV_RGB2GRAY);
+	else if (img.channels() == 4)
+		cv::cvtColor(img, save, CV_RGBA2GRAY);
+	else
+		save = img.clone();
+	// Save image as pgm
+	std::vector< int > compression_params;			//vector that stores the compression parameters of the image
+	compression_params.push_back(CV_IMWRITE_PXM_BINARY);
+	compression_params.push_back(9);
+	std::string sFileNum = static_cast<std::ostringstream*>(&(std::ostringstream() << fileNum))->str();
+	std::string sFileName = fileNameFormat;
+	if (fileNum < 10)
+		sFileName += ("_000" + sFileNum + ".pgm");
+	else if ((fileNum >= 10) && (fileNum < 100))
+		sFileName += ("_00" + sFileNum + ".pgm");
+	else if ((fileNum >= 100) && (fileNum < 1000))
+		sFileName += ("_0" + sFileNum + ".pgm");
+	else
+		sFileName += ("_" + sFileNum + ".pgm");
+	return cv::imwrite(sFileName, save, compression_params);
 }
 
 
