@@ -20,10 +20,14 @@
 #define SINGLE_STEP             false
 #define MOTORCYCLE              true
 
-#define PRINT_TIMES             true
+#define PRINT_TIMES             false
 #define PRINT_VP                false
-#define PRINT_ANGLES            true
-#define PRINT_STATS             true
+#define PRINT_ANGLES            false
+#define PRINT_STATS             false
+
+#define FRAME_SKIP_COUNT        0
+#define FPS                     30.0        // Frames per second (5ft/19pxl)
+#define MPP                     0.0802105   // Meters per pixel
 
 inline bool saveImg(const cv::Mat &img, std::string fileNameFormat, int fileNum);
 inline void lane_marker_filter( const cv::Mat &src, cv::Mat &dst );
@@ -49,7 +53,7 @@ int main( int argc, char* argv[] ) {
 
     sdla alarm( "boop.wav" );
 
-    int undist = 1;
+    bool undist = false;
     cvwin win_a( "frame" );
     cvwin win_b( "bird_frame" );
     cvwin win_c( "hough_frame" );
@@ -289,13 +293,12 @@ int main( int argc, char* argv[] ) {
         hmtimer.stop();
 
         /* Printing prints estimates of the angles, not raw */
-        if ( PRINT_ANGLES ) std::cout << "ANGLE: " << theta.xHat << "," << gamma.xHat << std::endl;
+        if ( PRINT_ANGLES ) DMESG( "ANGLE: " << theta.xHat << "," << gamma.xHat );
 
         //** Calculate homog. intensity feature frame mu and sigma
         float mu, sigma;        
         bayes_seg.mean_stddev( bird_frame, mu, sigma );
-        if ( PRINT_STATS )
-            std::cout << "MU: " << mu << " SIGMA: " << sigma << std::endl;
+        if ( PRINT_STATS ) DMESG( "MU: " << mu << " SIGMA: " << sigma );
         
         //** If stats significantly different from last frame, reseed EM algor.
         itimer.start();
@@ -352,23 +355,16 @@ int main( int argc, char* argv[] ) {
             // Only cars will be calculated position and direction
             if (car_track.objCands[i].inFilter)
             {
-                // Currently ignoreing EKF, it clearly need absolute velocity to function properly
+                // Currently ignoring EKF, it clearly need absolute velocity to function properly
                 // As is, the EKF is very slow to follow, and exibits odd behavior as it models
-                // a car on he road turning around, etc., as it's relative velocity changes
+                // a car on the road turning around as it's relative velocity jitters
                 cv::circle( blob_disp, car_track.objCands[i].Pos, 3, cv::Scalar(255, 0, 0), -1);
                 cv::circle( blob_disp, car_track.objCands[i].filterPos, 3, cv::Scalar(0, 255, 0), -1);
 
-                cv::Point2f cvtP;
-                car_track.cvtCoord(car_track.objCands[i].filterPos, cvtP, obj_frame);
-                cv::Point2f feetPos((float)cvtP.x*PX_FEET_SCALE, (float)cvtP.y*PX_FEET_SCALE);
-
                 cv::Point2f lstart = car_track.objCands[i].filterPos;
-                cv::Point2f lend = car_track.objCands[i].filterPos + 100 * car_track.objCands[i].filterVelo;
-                cv::line( blob_disp, lstart, lend, cv::Scalar(0, 128, 0), 4);
-
-                std::cout << "Object[" << i << "] x: " << feetPos.x << " y: " << feetPos.y
-                          << " xv: " << car_track.objCands[i].filterVelo.x
-                          << " yv: " << car_track.objCands[i].filterVelo.y << std::endl;
+                cv::Point2f lend = car_track.objCands[i].filterPos + car_track.objCands[i].filterVelo;
+                cv::line( blob_disp, lstart, lend, cv::Scalar(0, 128, 0), 3);
+                lend *= 1000.0; // Make line seg "infinite" for intersection test
 
                 // http://www.michigan.gov/documents/msp/BrakeTesting-MSP_VehicleEval08_Web_221473_7.pdf
                 // Average was 26.86ft/s^2 or about 8 m/s^2 braking acceleration
@@ -379,15 +375,14 @@ int main( int argc, char* argv[] ) {
                 if ( calc_intersect( candVec, hitSeg, intersection ) ) {
                     // Intersected with rear of vehicle, check stopping distance
                     // Ignore x velocity, y should be very very dominant
-                    float vy = car_track.objCands[i].filterVelo.y;
-                    //TODO: convert velocity from pixels per frame to meters per second
-                    //vy *= some conversion factor;
-                    float stopdist = ( vy * vy ) / ( 2.0 * 6.0 );
-                    float dist = 480 - car_track.objCands[i].filterPos.y;
-                    if ( stopdist > dist ) {
+                    // Convert velocity from pixels per frame to meters per second
+                    float vy = car_track.objCands[i].filterVelo.y * MPP * FPS;
+                    float stopdist = ( vy * vy ) / ( 2.0 * 6.0 ); // v^2 / (2*a)
+                    float dist = (480 - car_track.objCands[i].filterPos.y) * MPP;
+                    DMESG( "vy: " << vy << " dist: " << dist << " stopdist: " << stopdist << " XY: " << lstart );
+                    if ( stopdist > dist ) { // Cannot break within distance
                         // Alert user of potential hazard
-                        // TODO: Setup leveled response, deal with priority properly
-                        std::cout << "\033[22;31mAERT!\e[m" << std::endl;
+                        std::cout << "\033[22;31mALERT!\e[m" << std::endl;
                         alarming = true;
                         alarm.set_interval( 0, 100 );
                         alarm.play_WAV();
@@ -432,8 +427,8 @@ int main( int argc, char* argv[] ) {
     /* Quit if key is ESC or q */
         if(key == 27 || key == 'q') break;
         else if(key == 'u') {
-            /* u key switches undistortion on/off. default is on. */
-            undist = (undist + 1) % 2;
+            /* u key switches undistortion on/off. default is off. */
+            undist = !undist;
         }
     }
     DMESG( "Done processing frames" );

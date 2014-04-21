@@ -16,11 +16,10 @@ CarTracking::CarTracking(void)
 	params.thresholdStep = 5;
 
 	params.minArea = MIN_BLOB_AREA;
-	params.minConvexity = 0.3f;				// ????
-	params.minInertiaRatio = 0.01f;			// ????
+	params.minInertiaRatio = 0.5;
 
 	params.maxArea = MAX_BLOB_AREA;
-	params.maxConvexity = 10.0f;			// ????
+	params.maxInertiaRatio = 1.0;
 
 	params.filterByArea = true;
 	params.filterByColor = false;
@@ -152,8 +151,7 @@ inline void CarTracking::updateInObjCand(int idx, Point2f Pt)
 
 		// Convert position from Mat format to Point format
 		objCands[idx].prev_filterPos = objCands[idx].filterPos;
-		//objCands[idx].filterPos = Point2f(measurement.at<float>(0), measurement.at<float>(1));
-		objCands[idx].filterPos = Point2f(estimated.at<float>(0), estimated.at<float>(1));
+		objCands[idx].filterPos = Point2f(measurement.at<float>(0), measurement.at<float>(1));
 
         Point posdelta = objCands[idx].filterPos - objCands[idx].prev_filterPos;
         measurement(0) = posdelta.x;
@@ -210,20 +208,22 @@ inline void CarTracking::updateOutObjCand(void)
 				prediction = objCands[i].EKF.predict();
 
 				// Convert position from Mat format to Point format
-				objCands[i].filterPos = Point2f(prediction.at<float>(0), prediction.at<float>(1));
+				//objCands[i].filterPos = Point2f(prediction.at<float>(0), prediction.at<float>(1));
 				
 				// Update for veloKF
-				objCands[i].veloKF.predict();
+				prediction = objCands[i].veloKF.predict();
+
+				objCands[i].filterVelo = Point2f(prediction.at<float>(0), prediction.at<float>(1));
 				
-				Mat_<float> measurement(2, 1);
-				objCands[i].prev_filterPos = objCands[i].filterPos;
-				Point posdelta = objCands[i].filterPos - objCands[i].prev_filterPos;
-        		measurement(0) = posdelta.x;
-        		measurement(1) = posdelta.y;
+				//Mat_<float> measurement(2, 1);
+				//objCands[i].prev_filterPos = objCands[i].filterPos;
+				//Point posdelta = objCands[i].filterPos - objCands[i].prev_filterPos;
+        		//measurement(0) = posdelta.x;
+        		//measurement(1) = posdelta.y;
         		
-        		Mat_<float> estimated;
-        		estimated = objCands[i].veloKF.correct(measurement);
-				objCands[i].filterVelo = Point2f(estimated.at<float>(0), estimated.at<float>(1));
+        		//Mat_<float> estimated;
+        		//estimated = objCands[i].veloKF.correct(measurement);
+				//objCands[i].filterVelo = Point2f(estimated.at<float>(0), estimated.at<float>(1));
 				
 				//fittingLine(i);
 			}
@@ -307,8 +307,7 @@ void CarTracking::calAngle(const Point2f &carPos, const Mat &img, Point2f &normV
 * --------------------------------------------------------------------------------*/
 /* This function will find the bounding contour boxes. The bounding boxes
  * is contained in the vector 'boundRect'.
- * NOTE: the function only return the boxes whose sizes are greater than
- * 'MIN_BOUND_BOX_EREA'
+ * NOTE: the function only bounds blobs whose sizes are greater than MIN_BOUND_BOX_EREA'
  */
 void CarTracking::findBoundContourBox(const Mat &img)
 {
