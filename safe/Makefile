@@ -23,7 +23,7 @@ $(OUTPUT) : $(OBJS)
 main.o : main.cpp defs.hpp fsource.hpp cvwin.hpp timer.hpp MSAC.hpp kalman.hpp bayesSeg.hpp carTracking.hpp sdla.hpp
 	$(CC) $(CFLAGS) -c main.cpp
 
-sdla.o : sdla.cpp sdla.hpp
+sdla.o : sdla.cpp defs.hpp sdla.hpp
 	$(CC) $(CFLAGS) -c sdla.cpp
 
 homography.o: homography.cpp homography.hpp

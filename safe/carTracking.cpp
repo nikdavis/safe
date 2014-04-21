@@ -153,12 +153,15 @@ inline void CarTracking::updateInObjCand(int idx, Point2f Pt)
 		objCands[idx].prev_filterPos = objCands[idx].filterPos;
 		objCands[idx].filterPos = Point2f(measurement.at<float>(0), measurement.at<float>(1));
 
-        Point posdelta = objCands[idx].filterPos - objCands[idx].prev_filterPos;
-        if ( fabs( posdelta.x - objCands[idx].prev_posDelta.x ) > ( 0.0802105 * 8 ) ) posdelta.x = objCands[idx].prev_posDelta.x;
-        if ( fabs( posdelta.y - objCands[idx].prev_posDelta.y ) > ( 0.0802105 * 8 ) ) posdelta.y = objCands[idx].prev_posDelta.y;
+        Point2f posdelta = objCands[idx].filterPos - objCands[idx].prev_filterPos;
+        // V = v + at, t = 1/fps, or s/f = 1/30, so 8m/s^s * 1/30s / MPP
+        if ( fabs( posdelta.x - objCands[idx].prev_posDelta.x ) > ( ( 8 / 30 ) ) / 0.0802105 )
+                    measurement(0) = objCands[idx].prev_posDelta.x;
+        else        measurement(0) = posdelta.x;
+        if ( fabs( posdelta.y - objCands[idx].prev_posDelta.y ) > ( ( 8 / 30 ) ) / 0.0802105 )
+                    measurement(1) = objCands[idx].prev_posDelta.y;
+        else        measurement(1) = posdelta.y;
         objCands[idx].prev_posDelta = posdelta;
-        measurement(0) = posdelta.x;
-        measurement(1) = posdelta.y;
         estimated = objCands[idx].veloKF.correct(measurement);
 		objCands[idx].filterVelo = Point2f(estimated.at<float>(0), estimated.at<float>(1));
 
@@ -216,7 +219,8 @@ inline void CarTracking::updateOutObjCand(void)
 				// Update for veloKF
 				prediction = objCands[i].veloKF.predict();
 
-				objCands[i].filterVelo = Point2f(prediction.at<float>(0), prediction.at<float>(1));
+                objCands[i].prev_filterPos = objCands[i].filterPos;
+                objCands[i].filterVelo = Point2f(prediction.at<float>(0), prediction.at<float>(1));
 				
 				//Mat_<float> measurement(2, 1);
 				//objCands[i].prev_filterPos = objCands[i].filterPos;

@@ -329,7 +329,7 @@ int main( int argc, char* argv[] ) {
 		//saveImg( obj_frame, "./frame/erode_frame", frame_count);
 		//cv::dilate(obj_frame, obj_frame, kernel);
 		//saveImg( obj_frame, "./frame/dilate_frame", frame_count);
-		
+
         //** Perform blob detection then passing object candidates through
         // temporal filter. Only blobs that show up in a certain consecutive
         // frame are considered as cars. And only cars are passed through 
@@ -366,30 +366,30 @@ int main( int argc, char* argv[] ) {
                 cv::Point2f lend = car_track.objCands[i].filterPos + car_track.objCands[i].filterVelo;
                 cv::line( blob_disp, lstart, lend, cv::Scalar(0, 128, 0), 3);
                 lend *= 1000.0; // Make line seg "infinite" for intersection test
-		
-		char zBuffer[35];
-                int baseline=0;  
-                snprintf(zBuffer, 35, "%f - %f", car_track.objCands[i].filterVelo.x, car_track.objCands[i].filterVelo.y);
+
+                char zBuffer[35];
+                int baseline=0;
+                snprintf(zBuffer, 35, "%.3f - %.3f", car_track.objCands[i].filterVelo.x, car_track.objCands[i].filterVelo.y);
                 cv::Size textSize = cv::getTextSize(zBuffer, CV_FONT_HERSHEY_COMPLEX, 0.55, 1, &baseline);  
                 
                 // center the text
-		cv::Point textOrg((car_track.objCands[i].filterPos.x - textSize.width/2), 
+                cv::Point textOrg((car_track.objCands[i].filterPos.x - textSize.width/2), 
 					  (car_track.objCands[i].filterPos.y - textSize.height/2 - 4));
-		cv::putText( blob_disp, zBuffer, textOrg, 
+                cv::putText( blob_disp, zBuffer, textOrg, 
 					CV_FONT_HERSHEY_COMPLEX, 0.55, cv::Scalar(255, 255, 0));
 
-                snprintf(zBuffer, 35, "%f - %f", car_track.objCands[i].filterPos.x, car_track.objCands[i].filterPos.y);
+                snprintf(zBuffer, 35, "%.3f - %.3f", car_track.objCands[i].filterPos.x, car_track.objCands[i].filterPos.y);
                 
                 // center the text
-		cv::Point textOrg1((car_track.objCands[i].filterPos.x - textSize.width/2), 
+                cv::Point textOrg1((car_track.objCands[i].filterPos.x - textSize.width/2), 
 					  (car_track.objCands[i].filterPos.y + textSize.height/2 + 4));
-		cv::putText( blob_disp, zBuffer, textOrg1, 
+                cv::putText( blob_disp, zBuffer, textOrg1, 
 					CV_FONT_HERSHEY_COMPLEX, 0.55, cv::Scalar(255, 255, 0));
 
 
                 // http://www.michigan.gov/documents/msp/BrakeTesting-MSP_VehicleEval08_Web_221473_7.pdf
                 // Average was 26.86ft/s^2 or about 8 m/s^2 braking acceleration
-                // For safety, assume max braking of 6 m/s
+                // For safety, assume max braking of 6 m/s^s
                 cv::Point2f intersection;
                 cv::Vec4f candVec( lstart.x, lstart.y, lend.x, lend.y );
                 cv::Vec4f hitSeg( 100, 479, 300, 479 );
