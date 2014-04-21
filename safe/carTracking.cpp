@@ -154,9 +154,12 @@ inline void CarTracking::updateInObjCand(int idx, Point2f Pt)
 		objCands[idx].filterPos = Point2f(measurement.at<float>(0), measurement.at<float>(1));
 
         Point posdelta = objCands[idx].filterPos - objCands[idx].prev_filterPos;
+        if ( posdelta.x > ( 0.0802105 * 8 ) ) posdelta.x = ( 0.0802105 * 8 );
+        if ( posdelta.y > ( 0.0802105 * 8 ) ) posdelta.y = ( 0.0802105 * 8 );
         measurement(0) = posdelta.x;
         measurement(1) = posdelta.y;
         estimated = objCands[idx].veloKF.correct(measurement);
+        objCands[idx].prev_filterVelo = objCands[idx].filterVelo;
 		objCands[idx].filterVelo = Point2f(estimated.at<float>(0), estimated.at<float>(1));
 
 		//fittingLine(idx);
@@ -399,7 +402,7 @@ inline void CarTracking::initVeloKF(int objCandIdx) {
         pow((float)dt, 3)/3.0,    0,                      pow((float)dt, 2)/2.0,    0,
         0,                      pow((float)dt, 3)/3.0,    0,                      pow((float)dt, 2)/2.0);
 
-    float meas_noise    = 0.05;
+    float meas_noise    = 0.1;
     float process_noise = 0.005;
     objCands[objCandIdx].veloKF.processNoiseCov = objCands[objCandIdx].veloKF.processNoiseCov*( process_noise*process_noise );
     setIdentity( objCands[objCandIdx].veloKF.measurementNoiseCov, Scalar::all( meas_noise*meas_noise ) );

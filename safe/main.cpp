@@ -366,10 +366,6 @@ int main( int argc, char* argv[] ) {
                 cv::Point2f lend = car_track.objCands[i].filterPos + car_track.objCands[i].filterVelo;
                 cv::line( blob_disp, lstart, lend, cv::Scalar(0, 128, 0), 3);
                 lend *= 1000.0; // Make line seg "infinite" for intersection test
-
-                std::cout << "Object[" << i << "] x: " << feetPos.x << " y: " << feetPos.y
-                          << " xv: " << car_track.objCands[i].filterVelo.x
-                          << " yv: " << car_track.objCands[i].filterVelo.y << std::endl;
 		
 		char zBuffer[35];
                 int baseline=0;  
@@ -397,19 +393,21 @@ int main( int argc, char* argv[] ) {
                 cv::Point2f intersection;
                 cv::Vec4f candVec( lstart.x, lstart.y, lend.x, lend.y );
                 cv::Vec4f hitSeg( 100, 479, 300, 479 );
-                if ( calc_intersect( candVec, hitSeg, intersection ) ) {
+                if ( calc_intersect( candVec, hitSeg, intersection ) &&
+                     ( car_track.objCands[i].filterVelo.y > 0 ) ) {
                     // Intersected with rear of vehicle, check stopping distance
                     // Ignore x velocity, y should be very very dominant
                     // Convert velocity from pixels per frame to meters per second
                     float vy = car_track.objCands[i].filterVelo.y * MPP * FPS;
+                    vy = vy > 0 ? vy : 0;
                     float stopdist = ( vy * vy ) / ( 2.0 * 6.0 ); // v^2 / (2*a)
                     float dist = (480 - car_track.objCands[i].filterPos.y) * MPP;
-                    DMESG( "vy: " << vy << " dist: " << dist << " stopdist: " << stopdist << " XY: " << lstart );
+                    DMESG( "obj[" << i <<"] vy: " << vy << " dist: " << dist << " stopdist: " << stopdist << " XY: " << lstart );
                     if ( stopdist > dist ) { // Cannot break within distance
                         // Alert user of potential hazard
                         std::cout << "\033[22;31mALERT!\e[m" << std::endl;
+                        if ( !alarming ) alarm.set_interval( 0, 100 );
                         alarming = true;
-                        alarm.set_interval( 0, 100 );
                     }
                 }
             }
