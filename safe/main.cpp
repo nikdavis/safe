@@ -156,10 +156,11 @@ int main( int argc, char* argv[] ) {
     // Request and process frames until source indicates EOF
     int frame_count = 0;
     while ( fsrc->get_frame( frame_raw ) == 0 ) {
+        for ( int i = 0; i < FRAME_SKIP_COUNT; ++i );
+            if ( fsrc->get_frame( frame_raw ) != 0 ) break;
+
         ptimer.start();
 		frame_count++;
-        /* Explicitly undistorting our FireflyMV camera */
-
         /* Explicitly undistorting our FireflyMV camera */
         utimer.start();
         if ( undist ) {
@@ -369,31 +370,40 @@ int main( int argc, char* argv[] ) {
 
                 char zBuffer[35];
                 int baseline=0;
-                snprintf(zBuffer, 35, "%.3f - %.3f", car_track.objCands[i].filterVelo.x, car_track.objCands[i].filterVelo.y);
-                cv::Size textSize = cv::getTextSize(zBuffer, CV_FONT_HERSHEY_COMPLEX, 0.55, 1, &baseline);  
-                
+
+                snprintf(zBuffer, 35, "%d", i);
+                cv::Size textSize = cv::getTextSize(zBuffer, CV_FONT_HERSHEY_COMPLEX, 0.55, 1, &baseline);
+
                 // center the text
                 cv::Point textOrg((car_track.objCands[i].filterPos.x - textSize.width/2), 
+					  (car_track.objCands[i].filterPos.y + textSize.height/2));
+                cv::putText( blob_disp, zBuffer, textOrg, 
+					CV_FONT_HERSHEY_COMPLEX, 0.55, cv::Scalar(0, 0, 255));
+
+                snprintf(zBuffer, 35, "%.3f - %.3f", car_track.objCands[i].filterVelo.x, car_track.objCands[i].filterVelo.y);
+                textSize = cv::getTextSize(zBuffer, CV_FONT_HERSHEY_COMPLEX, 0.55, 1, &baseline);  
+
+                // center the text
+                textOrg = cv::Point((car_track.objCands[i].filterPos.x - textSize.width/2), 
 					  (car_track.objCands[i].filterPos.y - textSize.height/2 - 4));
                 cv::putText( blob_disp, zBuffer, textOrg, 
-					CV_FONT_HERSHEY_COMPLEX, 0.55, cv::Scalar(255, 255, 0));
+					CV_FONT_HERSHEY_COMPLEX, 0.55, cv::Scalar(0, 255, 255));
 
-                snprintf(zBuffer, 35, "%.3f - %.3f", car_track.objCands[i].filterPos.x, car_track.objCands[i].filterPos.y);
-                
+                /*snprintf(zBuffer, 35, "%.3f - %.3f", car_track.objCands[i].filterPos.x, car_track.objCands[i].filterPos.y);
+                textSize = cv::getTextSize(zBuffer, CV_FONT_HERSHEY_COMPLEX, 0.55, 1, &baseline); 
+
                 // center the text
-                cv::Point textOrg1((car_track.objCands[i].filterPos.x - textSize.width/2), 
+                textOrg = cv::Point((car_track.objCands[i].filterPos.x - textSize.width/2), 
 					  (car_track.objCands[i].filterPos.y + textSize.height/2 + 4));
-                cv::putText( blob_disp, zBuffer, textOrg1, 
-					CV_FONT_HERSHEY_COMPLEX, 0.55, cv::Scalar(255, 255, 0));
+                cv::putText( blob_disp, zBuffer, textOrg, 
+					CV_FONT_HERSHEY_COMPLEX, 0.55, cv::Scalar(0, 255, 255));*/
 
 
                 // http://www.michigan.gov/documents/msp/BrakeTesting-MSP_VehicleEval08_Web_221473_7.pdf
                 // Average was 26.86ft/s^2 or about 8 m/s^2 braking acceleration
                 // For safety, assume max braking of 6 m/s^s
-                cv::Point2f intersection;
-                cv::Vec4f candVec( lstart.x, lstart.y, lend.x, lend.y );
-                cv::Vec4f hitSeg( 100, 479, 300, 479 );
-                if ( calc_intersect( candVec, hitSeg, intersection ) &&
+                if ( ( car_track.objCands[i].filterPos.x > 100 ) &&
+                     ( car_track.objCands[i].filterPos.x < 300 ) &&
                      ( car_track.objCands[i].filterVelo.y > 0 ) ) {
                     // Intersected with rear of vehicle, check stopping distance
                     // Ignore x velocity, y should be very very dominant
