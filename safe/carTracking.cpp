@@ -137,7 +137,6 @@ inline void CarTracking::updateInObjCand(int idx, Point2f Pt)
 	if (objCands[idx].inFilter)
 	{
 		// Predict the next position
-		objCands[idx].EKF.predict();
         objCands[idx].veloKF.predict();
 
 		// Update the new measurement values
@@ -145,9 +144,8 @@ inline void CarTracking::updateInObjCand(int idx, Point2f Pt)
 		measurement(0) = (float)objCands[idx].Pos.x;
 		measurement(1) = (float)objCands[idx].Pos.y;
 
-		// Estimate the new position
+		// Estimate
 		Mat_<float> estimated;
-		estimated = objCands[idx].EKF.correct(measurement);
 
 		// Convert position from Mat format to Point format
 		objCands[idx].prev_filterPos = objCands[idx].filterPos;
@@ -164,8 +162,6 @@ inline void CarTracking::updateInObjCand(int idx, Point2f Pt)
         objCands[idx].prev_posDelta = posdelta;
         estimated = objCands[idx].veloKF.correct(measurement);
 		objCands[idx].filterVelo = Point2f(estimated.at<float>(0), estimated.at<float>(1));
-
-		//fittingLine(idx);
 	}
 	else	// If an object is not appeared long enough.
 	{
@@ -198,41 +194,14 @@ inline void CarTracking::updateOutObjCand(void)
 		// to any old object
 		if (!objCands[i].match)
 		{
-			//
-			// Even though the object does not appear in some frames, it is still need
-			// to update the Kalman filter if it is still in the filter.
-			// In this case, there is no measurement data. Therefore, there is no correction
-			// step, and the filter position is the predict position.
-			//
-			// For the KF for velocity, this KF measurement values are fed from the differential 
-			// positions in EKF. Therefore, the KF for velocity always has measurement values.
-			//
 			if (objCands[i].inFilter)
 			{
-				// Predict the next position
+				// Predict veloKF
 				Mat_<float> prediction;
-				prediction = objCands[i].EKF.predict();
-
-				// Convert position from Mat format to Point format
-				//objCands[i].filterPos = Point2f(prediction.at<float>(0), prediction.at<float>(1));
-				
-				// Update for veloKF
 				prediction = objCands[i].veloKF.predict();
 
                 objCands[i].prev_filterPos = objCands[i].filterPos;
                 objCands[i].filterVelo = Point2f(prediction.at<float>(0), prediction.at<float>(1));
-				
-				//Mat_<float> measurement(2, 1);
-				//objCands[i].prev_filterPos = objCands[i].filterPos;
-				//Point posdelta = objCands[i].filterPos - objCands[i].prev_filterPos;
-        		//measurement(0) = posdelta.x;
-        		//measurement(1) = posdelta.y;
-        		
-        		//Mat_<float> estimated;
-        		//estimated = objCands[i].veloKF.correct(measurement);
-				//objCands[i].filterVelo = Point2f(estimated.at<float>(0), estimated.at<float>(1));
-				
-				//fittingLine(i);
 			}
 
 			objCands[i].inFrs -= 1;
@@ -247,42 +216,6 @@ inline void CarTracking::updateOutObjCand(void)
 	}
 }
 
-inline void  CarTracking::fittingLine(int idx)
-{
-	objCands[idx].frCount++;
-	if ((objCands[idx].frCount % 6) == 0)
-	{	
-		Point p(objCands[idx].filterPos.x, objCands[idx].filterPos.y + objCands[idx].frCount * 5);
-		//objCands[idx].posList.push_back(objCands[idx].filterPos);
-		
-		objCands[idx].posList.push_back(p);
-		if (objCands[idx].posList.size() > POS_LIST_LENGTH)
-			objCands[idx].posList.erase(objCands[idx].posList.begin());
-		else if (objCands[idx].posList.size() == 1)
-		{
-			Point p1(objCands[idx].filterPos.x, objCands[idx].filterPos.y + objCands[idx].frCount * 5 + 10);
-			objCands[idx].posList.push_back(p1);
-		}
-		
-		fitLine(objCands[idx].posList, objCands[idx].direction, CV_DIST_L2, 0, 0.01, 0.01);
-		
-		/*if (idx == 0)
-		{
-			ofstream fout;
-			//fout.open("position.csv");
-			fout.open("position.csv", fstream::app);
-			//for (unsigned int i = 0; i < objCands[idx].posList.size(); i++)
-			//{
-			//	fout << objCands[idx].posList.at(i).x << "," << objCands[idx].posList.at(i).y << endl;
-			//}
-			fout << objCands[idx].Pos.x << "," << objCands[idx].Pos.y << ",";
-			fout << objCands[idx].filterPos.x << "," << objCands[idx].filterPos.y << ",";
-			fout << objCands[idx].direction(0) << "," << objCands[idx].direction(1) << endl;
-			fout.close();
-		}*/
-	}	
-}
-
 /* This function will convert to coordinate of a point from top left original 
  * to bottom middle point.
  */
@@ -290,23 +223,6 @@ void CarTracking::cvtCoord(const Point2f &orig, Point2f &cvt, const Mat &img)
 {
 	cvt.x = orig.x - ( img.cols / 2.0 );
 	cvt.y = img.rows - orig.y;
-}
-
-void CarTracking::calAngle(const Point2f &carPos, const Mat &img, Point2f &normVxy)
-{
-	float Vx = (float)((img.cols / 2) - carPos.x);
-	float Vy = (float)(img.rows - carPos.y);
-
-	if ((Vx == 0) && (Vy == 0))
-	{
-		normVxy.x = 0;
-		normVxy.y = 0;
-	}
-	else
-	{
-		normVxy.x = Vx / sqrt(powf(Vx, 2) + powf(Vy, 2));
-		normVxy.y = Vy / sqrt(powf(Vx, 2) + powf(Vy, 2));
-	}
 }
 
 /* ---------------------------------------------------------------------------------
@@ -413,5 +329,41 @@ inline void CarTracking::initVeloKF(int objCandIdx) {
     setIdentity( objCands[objCandIdx].veloKF.errorCovPost, Scalar::all(0.1));
 }
 
+/* ---------------------------------------------------------------------------------
+ *								POSITION
+ * --------------------------------------------------------------------------------*/
+ void CarTracking::importPos(string inputFileName, int lineNumberSought, Point2f &pos, Point2f &velo)
+ {
+ 	string line, csvItem;
+    ifstream myfile (inputFileName.c_str());
+    int lineNumber = 0;
+    if (myfile.is_open()) {
+        while (getline(myfile,line)) {
+            lineNumber++;
+            if(lineNumber == lineNumberSought) {
+                istringstream myline(line);
+                if (getline(myline, csvItem, ',')) {
+                	pos.x = (float)atof(csvItem.c_str());
+                }
+                if(getline(myline, csvItem, ',')) {
+	                pos.y = (float)atof(csvItem.c_str());
+                }
+                if(getline(myline, csvItem, ',')) {
+	                velo.y = (float)atof(csvItem.c_str());
+                }
+            }
+        }
+        myfile.close();
+    }
+ }
+ 
+ void CarTracking::exportPos(string outputFileName, const Point2f &pos, const Point2f &velo)
+ {
+ 	ofstream fout(outputFileName.c_str(), fstream::app);
+ 	fout << pos.x << "," << pos.y << "," << velo.y << "," << endl;
+ 	fout.close();
+ }
+ 
+ 
 
 

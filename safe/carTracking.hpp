@@ -122,6 +122,14 @@ public:
 	cv::vector< cv::Rect > boundRect;
 
 	void findBoundContourBox( const cv::Mat &img );
+	
+	/* ---------------------------------------------------------------------------------
+ 	*								POSITION
+ 	* --------------------------------------------------------------------------------*/
+ 	
+	void importPos(std::string inputFileName, int lineNumberSought, cv::Point2f &pos, cv::Point2f &velo);
+	
+	void exportPos(std::string outputFileName, const cv::Point2f &pos, const cv::Point2f &velo);
 
 };
 
