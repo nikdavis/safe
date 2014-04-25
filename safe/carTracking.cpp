@@ -136,32 +136,9 @@ inline void CarTracking::updateInObjCand(int idx, Point2f Pt)
 	// If the object is in Kalman filter, update the Kalman filter.
 	if (objCands[idx].inFilter)
 	{
-		// Predict the next position
-        objCands[idx].veloKF.predict();
-
-		// Update the new measurement values
-		Mat_<float> measurement(2, 1);
-		measurement(0) = (float)objCands[idx].Pos.x;
-		measurement(1) = (float)objCands[idx].Pos.y;
-
-		// Estimate
-		Mat_<float> estimated;
-
-		// Convert position from Mat format to Point format
-		objCands[idx].prev_filterPos = objCands[idx].filterPos;
-		objCands[idx].filterPos = Point2f(measurement.at<float>(0), measurement.at<float>(1));
-
-        Point2f posdelta = objCands[idx].filterPos - objCands[idx].prev_filterPos;
-        // V = v + at, t = 1/fps, or s/f = 1/30, so 8m/s^s * 1/30s / MPP
-        if ( fabs( posdelta.x - objCands[idx].prev_posDelta.x ) > ( ( 8 / 30 ) ) / 0.0802105 )
-                    measurement(0) = objCands[idx].prev_posDelta.x;
-        else        measurement(0) = posdelta.x;
-        if ( fabs( posdelta.y - objCands[idx].prev_posDelta.y ) > ( ( 8 / 30 ) ) / 0.0802105 )
-                    measurement(1) = objCands[idx].prev_posDelta.y;
-        else        measurement(1) = posdelta.y;
-        objCands[idx].prev_posDelta = posdelta;
-        estimated = objCands[idx].veloKF.correct(measurement);
-		objCands[idx].filterVelo = Point2f(estimated.at<float>(0), estimated.at<float>(1));
+		// This function will calculate velocity from position then 
+		// pass the velocity through veloKF.
+		filterVelo(objCands[idx]);
 	}
 	else	// If an object is not appeared long enough.
 	{
@@ -176,7 +153,7 @@ inline void CarTracking::updateInObjCand(int idx, Point2f Pt)
 			objCands[idx].inFilter = true;
 
 			initExtendKalman(idx);
-            initVeloKF(idx);
+            initVeloKF(objCands[idx]);
 		}
 	}
 }
@@ -299,24 +276,24 @@ inline void CarTracking::initExtendKalman(int objCandIdx)
 	setIdentity(objCands[objCandIdx].EKF.errorCovPost, Scalar::all(0.1));
 }
 
-inline void CarTracking::initVeloKF(int objCandIdx) {
+void CarTracking::initVeloKF(ObjCand &obj) {
     // Setup the velocity kalman filter
 
-    objCands[objCandIdx].veloKF.statePre.at<float>(0) = 416/2; // From homog frame size
-    objCands[objCandIdx].veloKF.statePre.at<float>(1) = 480/2;
-    objCands[objCandIdx].veloKF.statePre.at<float>(2) = 0;
-    objCands[objCandIdx].veloKF.statePre.at<float>(3) = 0;
+    obj.veloKF.statePre.at<float>(0) = 416/2; // From homog frame size
+    obj.veloKF.statePre.at<float>(1) = 480/2;
+    obj.veloKF.statePre.at<float>(2) = 0;
+    obj.veloKF.statePre.at<float>(3) = 0;
 
     float dt = 1.0 / 30.0;
-    objCands[objCandIdx].veloKF.transitionMatrix = *(Mat_<float>(4, 4) <<
+    obj.veloKF.transitionMatrix = *(Mat_<float>(4, 4) <<
                     1,      0,      dt,     0,
                     0,      1,      0,      dt,
                     0,      0,      1,      0,
                     0,      0,      0,      1);
 
-    setIdentity(objCands[objCandIdx].veloKF.measurementMatrix);
+    setIdentity(obj.veloKF.measurementMatrix);
 
-    objCands[objCandIdx].veloKF.processNoiseCov = *(Mat_<float>(4, 4) <<
+    obj.veloKF.processNoiseCov = *(Mat_<float>(4, 4) <<
         pow((float)dt, 4)/4.0,    0,                      pow((float)dt, 3)/3.0,    0,
         0,                      pow((float)dt, 4)/4.0,    0,                      pow((float)dt, 3)/3.0,
         pow((float)dt, 3)/3.0,    0,                      pow((float)dt, 2)/2.0,    0,
@@ -324,9 +301,37 @@ inline void CarTracking::initVeloKF(int objCandIdx) {
 
     float meas_noise    = 0.1;
     float process_noise = 0.005;
-    objCands[objCandIdx].veloKF.processNoiseCov = objCands[objCandIdx].veloKF.processNoiseCov*( process_noise*process_noise );
-    setIdentity( objCands[objCandIdx].veloKF.measurementNoiseCov, Scalar::all( meas_noise*meas_noise ) );
-    setIdentity( objCands[objCandIdx].veloKF.errorCovPost, Scalar::all(0.1));
+    obj.veloKF.processNoiseCov = obj.veloKF.processNoiseCov*( process_noise*process_noise );
+    setIdentity( obj.veloKF.measurementNoiseCov, Scalar::all( meas_noise*meas_noise ) );
+    setIdentity( obj.veloKF.errorCovPost, Scalar::all(0.1));
+}
+
+void CarTracking::filterVelo(ObjCand &obj)
+{
+	// Predict the next velocity
+    obj.veloKF.predict();
+
+	// Update the new measurement values
+	Mat_<float> measurement(2, 1);
+
+	// As for a new frame, the filterPos now is prev_filterPos
+	obj.prev_filterPos = obj.filterPos;
+	obj.filterPos = obj.Pos;
+
+    Point2f posdelta = obj.filterPos - obj.prev_filterPos;
+    // V = v + at, t = 1/fps, or s/f = 1/30, so 8m/s^s * 1/30s / MPP
+    if ( fabs( posdelta.x - obj.prev_posDelta.x ) > ( ( 8 / 30 ) ) / 0.0802105 )
+                measurement(0) = obj.prev_posDelta.x;
+    else        measurement(0) = posdelta.x;
+    if ( fabs( posdelta.y - obj.prev_posDelta.y ) > ( ( 8 / 30 ) ) / 0.0802105 )
+                measurement(1) = obj.prev_posDelta.y;
+    else        measurement(1) = posdelta.y;
+    obj.prev_posDelta = posdelta;
+    
+    // Estimate
+	Mat_<float> estimated;
+    estimated = obj.veloKF.correct(measurement);
+	obj.filterVelo = Point2f(estimated.at<float>(0), estimated.at<float>(1));	
 }
 
 /* ---------------------------------------------------------------------------------

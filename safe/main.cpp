@@ -17,7 +17,7 @@
 #include <string>
 
 // Pause after processing each frame
-#define SINGLE_STEP             false
+#define SINGLE_STEP             true
 #define MOTORCYCLE              true
 
 #define PRINT_TIMES             false
@@ -93,6 +93,10 @@ int main( int argc, char* argv[] ) {
     float prev_mu, prev_sigma;
     BayesianSegmentation    bayes_seg;
     CarTracking             car_track;
+    
+    if (TEST_ALARM) {
+    	car_track.initVeloKF(car_track.testObj);
+    }
 
     // Force update on first frame
     prev_mu = -1000.0;
@@ -350,8 +354,16 @@ int main( int argc, char* argv[] ) {
         if (TEST_ALARM) {
         	cv::Point2f pos, velo;
       		car_track.importPos("./position.csv", frame_count, pos, velo);
+      		car_track.testObj.Pos = pos;
+      		car_track.filterVelo(car_track.testObj);
       		cv::circle( blob_disp, pos, 3, cv::Scalar(0, 255, 0), -1);
-      		if (checkAlarm(pos, velo)) {
+      		
+      		char zBuffer[35];
+            
+            snprintf(zBuffer, 35, "%.3f - %.3f", car_track.testObj.filterVelo.x, car_track.testObj.filterVelo.y);
+            printText( blob_disp, car_track.testObj.filterPos, cv::Scalar(0, 255, 120), zBuffer);
+      		
+      		if (checkAlarm(car_track.testObj.filterPos, car_track.testObj.filterVelo)) {
             	// Alert user of potential hazard
                 std::cout << "\033[22;31mALERT!\e[m" << std::endl;
                 if ( !alarming ) 

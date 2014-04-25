@@ -83,12 +83,6 @@ private:
 	double calcDis( cv::Point2f pt1, cv::Point2f pt2) ;
 
 	/* ---------------------------------------------------------------------------------
-	*								KALMAN FILTER
-	* --------------------------------------------------------------------------------*/
-	void initExtendKalman( int objCandIdx );
-    void initVeloKF( int objCandIdx );
-
-	/* ---------------------------------------------------------------------------------
 	*								BOUNDING BOXES
 	* --------------------------------------------------------------------------------*/
 	cv::vector< cv::vector< cv::Point > > contours_poly;
@@ -100,7 +94,10 @@ private:
 public:
 	// Initialize CarTracking paramaters
 	CarTracking(void);
+	
 	~CarTracking(void);
+	
+	ObjCand		testObj;
 
 	/* ---------------------------------------------------------------------------------
 	*							SIMPLE BLOB DETECTION
@@ -124,10 +121,19 @@ public:
 	void findBoundContourBox( const cv::Mat &img );
 	
 	/* ---------------------------------------------------------------------------------
- 	*								POSITION
+	*								KALMAN FILTER
+	* --------------------------------------------------------------------------------*/
+	void initExtendKalman( int objCandIdx );
+	
+    void initVeloKF( ObjCand &obj );
+    
+    void filterVelo( ObjCand &obj );
+	
+	/* ---------------------------------------------------------------------------------
+ 	*								TESTING
  	* --------------------------------------------------------------------------------*/
  	
-	void importPos(std::string inputFileName, int lineNumberSought, cv::Point2f &pos, cv::Point2f &velo);
+ 	void importPos(std::string inputFileName, int lineNumberSought, cv::Point2f &pos, cv::Point2f &velo);
 	
 	void exportPos(std::string outputFileName, const cv::Point2f &pos, const cv::Point2f &velo);
 
