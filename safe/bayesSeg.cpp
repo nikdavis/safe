@@ -373,11 +373,11 @@ void BayesianSegmentation::probPLOUInit( double probP, double probL, double prob
 void BayesianSegmentation::classSeg( const Mat &img, Mat &obj, e_class cl ) const
 {
 	Mat temp = probPLOU_X.probP_X.clone();
-	threshold( probPLOU_X.probP_X, temp, 0.20, 1 , CV_THRESH_BINARY_INV );
+	threshold( probPLOU_X.probP_X, temp, 0.70, 1 , CV_THRESH_BINARY_INV );
 
 	multiply(probPLOU_X.probO_X, temp, probPLOU_X.probO_X);
 
-	threshold( probPLOU_X.probL_X, temp, 0.10, 1	 , CV_THRESH_BINARY_INV );
+	threshold( probPLOU_X.probL_X, temp, 0.70, 1	 , CV_THRESH_BINARY_INV );
 	multiply(probPLOU_X.probO_X, temp, probPLOU_X.probO_X);
 
 	threshold( probPLOU_X.probO_X, probPLOU_X.probO_X, PROB_THRESHOLD, 255, CV_THRESH_BINARY );
