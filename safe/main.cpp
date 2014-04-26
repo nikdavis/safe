@@ -33,12 +33,11 @@
 #define FPS                     30.0        // Frames per second (5ft/19pxl)
 #define MPP                     0.0802105   // Meters per pixel
 
-<<<<<<< HEAD
-=======
+
 inline void drawBoundingBox(cv::Mat &img, cv::Mat &H, cv::Point2f &pos);
 inline void printText( cv::Mat disp, const cv::Point text_center, cv::Scalar color, char text_buffer[] );
 inline bool checkAlarm( const cv::Point2f &pos, const cv::Point2f &velo);
->>>>>>> 989d29070c32aa8e6b3b615f7722b6a45b047ac4
+
 inline bool saveImg(const cv::Mat &img, std::string fileNameFormat, int fileNum);
 inline void lane_marker_filter( const cv::Mat &src, cv::Mat &dst );
 inline void show_hough( cv::Mat &dst, const std::vector<cv::Vec4i> lines );
@@ -440,9 +439,9 @@ int main( int argc, char* argv[] ) {
                 }
             }
         }
-<<<<<<< HEAD
+
         if ( !alarming ) alarm.set_interval( 0, 0 ); // Turn off alarm
-=======
+
         else {
 		    for (unsigned int i = 0; i < car_track.objCands.size(); i++)
 		    {
@@ -489,7 +488,6 @@ int main( int argc, char* argv[] ) {
 		}
         if ( !alarming ) 
         	alarm.set_interval( 0, 0 ); // Turn off alarm
->>>>>>> 989d29070c32aa8e6b3b615f7722b6a45b047ac4
 
         ptimer.stop();
 
@@ -556,8 +554,6 @@ int main( int argc, char* argv[] ) {
     return 0;
 }
 
-<<<<<<< HEAD
-=======
 inline void drawBoundingBox(cv::Mat &img, cv::Mat &H, cv::Point2f &pos)
 {
 	cv::Mat invH;
@@ -617,7 +613,6 @@ inline void printText( cv::Mat disp, const cv::Point text_center, cv::Scalar col
 		CV_FONT_HERSHEY_COMPLEX, 0.55, color);
 }
 
->>>>>>> 989d29070c32aa8e6b3b615f7722b6a45b047ac4
 inline void lane_marker_filter( const cv::Mat &src, cv::Mat &dst ) {
     int aux;
     int tau_cnt = 0;
