@@ -17,7 +17,7 @@
 #include <string>
 
 // Pause after processing each frame
-#define SINGLE_STEP             true
+#define SINGLE_STEP             false
 #define MOTORCYCLE              true
 
 #define PRINT_TIMES             false
@@ -25,12 +25,13 @@
 #define PRINT_ANGLES            false
 #define PRINT_STATS             false
 
-#define TEST_ALARM				true
+#define TEST_ALARM				false
 
 #define FRAME_SKIP_COUNT        0
 #define FPS                     30.0        // Frames per second (5ft/19pxl)
 #define MPP                     0.0802105   // Meters per pixel
 
+inline void drawBoundingBox(cv::Mat &img, cv::Mat &H, cv::Point2f &pos);
 inline void printText( cv::Mat disp, const cv::Point text_center, cv::Scalar color, char text_buffer[] );
 inline bool checkAlarm( const cv::Point2f &pos, const cv::Point2f &velo);
 inline bool saveImg(const cv::Mat &img, std::string fileNameFormat, int fileNum);
@@ -178,6 +179,8 @@ int main( int argc, char* argv[] ) {
             frame = frame_raw;
         }
         utimer.stop();
+        
+        cv::flip( frame, frame, 1);
 
         /* Gaussian helps preprocess noise out for LMF/Canny/Hough */
         cv::GaussianBlur( frame, frame, cv::Size(3, 3), 0, 0 );
@@ -349,7 +352,7 @@ int main( int argc, char* argv[] ) {
             cv::rectangle( blob_disp, car_track.boundRect[i], cv::Scalar(255, 0, 0), 2, 4, 0 );
         }
        
-
+		cv::cvtColor( frame, frame, CV_GRAY2RGB );
         bool alarming = false;
         if (TEST_ALARM) {
         	cv::Point2f pos, velo;
@@ -399,6 +402,9 @@ int main( int argc, char* argv[] ) {
 		            
 		            snprintf(zBuffer, 35, "%.3f - %.3f", car_track.objCands[i].filterVelo.x, car_track.objCands[i].filterVelo.y);
 		            printText( blob_disp, car_track.objCands[i].filterPos, cv::Scalar(0, 255, 120), zBuffer);
+		            
+		            // draw bounding box for the car in the original frame
+		            drawBoundingBox( frame, H, car_track.objCands[i].filterPos);
 
 					if (checkAlarm(car_track.objCands[i].filterPos, car_track.objCands[i].filterVelo)) {
 		            	// Alert user of potential hazard
@@ -420,8 +426,8 @@ int main( int argc, char* argv[] ) {
 
         // Update frame displaysnad box
         win_a.display_frame( frame );
-        win_b.display_frame( bird_frame );
-        win_c.display_frame( hough_frame );
+        //win_b.display_frame( bird_frame );
+        //win_c.display_frame( hough_frame );
         //win_d.display_frame( obj_frame );
         win_e.display_frame( blob_disp );
 
@@ -479,6 +485,24 @@ int main( int argc, char* argv[] ) {
 
     delete fsrc;
     return 0;
+}
+
+inline void drawBoundingBox(cv::Mat &img, cv::Mat &H, cv::Point2f &pos)
+{
+	cv::Mat invH;
+    cv::Point origCarPos;
+    invH = H.inv();
+    pointHomogToPointOrig(invH, pos, origCarPos);
+    int w = 	(int)(0.2f*powf((pos.y/15), 2)
+    		  	+ 3.5f*(pos.y/15) + 46);
+    
+    cv::Rect carBox( origCarPos.x - w / 2 , origCarPos.y - 3 * w / 4, w, w);
+    
+    if (img.channels() != 3)
+    	cvtColor( img, img, CV_GRAY2RGB);
+    	
+    cv::rectangle( img, carBox, cv::Scalar(0, 255, 0), 2, 4, 0 );
+    cv::circle( img, origCarPos, 3, cv::Scalar(0, 255, 255), -1);
 }
 
 inline bool checkAlarm( const cv::Point2f &pos, const cv::Point2f &velo)

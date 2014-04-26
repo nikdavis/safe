@@ -98,6 +98,10 @@ public:
 	~CarTracking(void);
 	
 	ObjCand		testObj;
+	
+	// LUT for the size of bounding box for objects
+	static int boxSize[21];
+
 
 	/* ---------------------------------------------------------------------------------
 	*							SIMPLE BLOB DETECTION

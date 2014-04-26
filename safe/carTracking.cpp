@@ -8,6 +8,10 @@
 using namespace cv;
 using namespace std;
 
+// LUT for the size of bounding box for objects
+int CarTracking::boxSize[21] = { 45, 50, 55, 60, 65, 70, 75, 82, 89, 96, 103, 111, 119, 128, 137, 147, 157, 168, 179, 191, 203 };
+
+
 CarTracking::CarTracking(void)
 {
 	// Intialize parameters for simple blob detection
