@@ -82,10 +82,26 @@ void calcVPFromAngles(int &x, int &y, float gamma, float theta) {
 	y = (int)5;
 }
 
+/* This function is to remap a point in Homography transformed image
+* to a point of original image */
+void pointHomogToPointOrig(cv::Mat &invH, cv::Point2f &input, cv::Point &output)
+{
+	/* Convert from point to matrix */
+	cv::Mat posHomog = (cv::Mat_<float>(3, 1) << input.x, input.y, 1);
+
+	/* Convert pos's type to the same type as invH's type for matrix multiplication */
+	posHomog.convertTo(posHomog, invH.type());
+
+	cv::Mat posOrig = invH*posHomog;
+
+	/* Normalize the position in the original image */
+	output.x = cvRound(posOrig.at<float>(0, 0) / posOrig.at<float>(2, 0));
+	output.y = cvRound(posOrig.at<float>(1, 0) / posOrig.at<float>(2, 0));
+}
+
 void planeToPlaneHomog(cv::Mat &in, cv::Mat &out, cv::Mat &H, int outputWidth) {
 	warpPerspective(in, out, H, cv::Size(outputWidth, OUTPUT_SIZE_Y));
 }
-
 
 /* Will generate a 2D to 2D homography matrix that can be used in
  * cv::warpPerspective to generate a bird-eye view transformation.

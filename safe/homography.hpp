@@ -28,6 +28,7 @@
 void calcAnglesFromVP(cv::Mat &vp, float &theta, float &gamma);
 void calcVPFromAngles(int &x, int &y, float gamma, float theta);
 void calcVpFromAngles(const float &theta, const float &gamma, cv::Point &vp);
+void pointHomogToPointOrig(cv::Mat &invH, cv::Point2f &input, cv::Point &output);
 void generateHomogMat(cv::Mat &H, float theta, float gamma);
 void planeToPlaneHomog(cv::Mat &in, cv::Mat &out, cv::Mat &H, int outputWidth);
 

@@ -17,7 +17,7 @@
 #include <string>
 
 // Pause after processing each frame
-#define SINGLE_STEP             true
+#define SINGLE_STEP             false
 #define MOTORCYCLE              true
 
 #define PRINT_TIMES             false
@@ -25,10 +25,20 @@
 #define PRINT_ANGLES            false
 #define PRINT_STATS             false
 
+
+#define TEST_ALARM				false
+
+
 #define FRAME_SKIP_COUNT        0
 #define FPS                     30.0        // Frames per second (5ft/19pxl)
 #define MPP                     0.0802105   // Meters per pixel
 
+<<<<<<< HEAD
+=======
+inline void drawBoundingBox(cv::Mat &img, cv::Mat &H, cv::Point2f &pos);
+inline void printText( cv::Mat disp, const cv::Point text_center, cv::Scalar color, char text_buffer[] );
+inline bool checkAlarm( const cv::Point2f &pos, const cv::Point2f &velo);
+>>>>>>> 989d29070c32aa8e6b3b615f7722b6a45b047ac4
 inline bool saveImg(const cv::Mat &img, std::string fileNameFormat, int fileNum);
 inline void lane_marker_filter( const cv::Mat &src, cv::Mat &dst );
 inline void show_hough( cv::Mat &dst, const std::vector<cv::Vec4i> lines );
@@ -171,7 +181,11 @@ int main( int argc, char* argv[] ) {
         }
         utimer.stop();
         
+
         //cv::flip( frame, frame, 1);
+
+        cv::flip( frame, frame, 1);
+
 
         /* Gaussian helps preprocess noise out for LMF/Canny/Hough */
         cv::GaussianBlur( frame, frame, cv::Size(3, 3), 0, 0 );
@@ -349,6 +363,9 @@ int main( int argc, char* argv[] ) {
             cv::rectangle( blob_disp, car_track.boundRect[i], cv::Scalar(255, 0, 0), 2, 4, 0 );
         }
 
+       
+		cv::cvtColor( frame, frame, CV_GRAY2RGB );
+
         bool alarming = false;
         for (unsigned int i = 0; i < car_track.objCands.size(); i++)
         {
@@ -423,14 +440,63 @@ int main( int argc, char* argv[] ) {
                 }
             }
         }
+<<<<<<< HEAD
         if ( !alarming ) alarm.set_interval( 0, 0 ); // Turn off alarm
+=======
+        else {
+		    for (unsigned int i = 0; i < car_track.objCands.size(); i++)
+		    {
+		        // show the center point of all blobs detected
+		        cv::circle( blob_disp, car_track.objCands[i].Pos, 3, cv::Scalar(0, 0, 255), -1);
+		        
+		        // Only cars will be calculated position and direction
+		        if (car_track.objCands[i].inFilter)
+		        {
+		            // Currently ignoring EKF, it clearly need absolute velocity to function properly
+		            // As is, the EKF is very slow to follow, and exibits odd behavior as it models
+		            // a car on the road turning around as it's relative velocity jitters
+		            cv::circle( blob_disp, car_track.objCands[i].Pos, 		3, cv::Scalar(255, 0, 0), -1);
+		            cv::circle( blob_disp, car_track.objCands[i].filterPos, 3, cv::Scalar(0, 255, 0), -1);
+
+		            cv::Point2f lstart = car_track.objCands[i].filterPos;
+		            cv::Point2f lend = car_track.objCands[i].filterPos + car_track.objCands[i].filterVelo;
+		            cv::line( blob_disp, lstart, lend, cv::Scalar(0, 128, 0), 3);
+		            lend *= 1000.0; // Make line seg "infinite" for intersection test
+
+		            char zBuffer[35];
+		            
+		            snprintf(zBuffer, 35, "%d", i);
+		            printText( blob_disp, car_track.objCands[i].filterPos, cv::Scalar(0, 0, 255), zBuffer);
+		            
+		            snprintf(zBuffer, 35, "%.3f - %.3f", car_track.objCands[i].filterVelo.x, car_track.objCands[i].filterVelo.y);
+		            printText( blob_disp, car_track.objCands[i].filterPos, cv::Scalar(0, 255, 120), zBuffer);
+		            
+		            // draw bounding box for the car in the original frame
+		            drawBoundingBox( frame, H, car_track.objCands[i].filterPos);
+
+					if (checkAlarm(car_track.objCands[i].filterPos, car_track.objCands[i].filterVelo)) {
+		            	// Alert user of potential hazard
+		                std::cout << "\033[22;31mALERT!\e[m" << std::endl;
+		                if ( !alarming ) 
+		                	alarm.set_interval( 0, 100 );
+		                alarming = true;
+		            }
+		            
+		            //if (i == 0)
+		            //	car_track.exportPos("./position.csv", car_track.objCands[i].filterPos, car_track.objCands[i].filterVelo);	
+		        }
+		    }
+		}
+        if ( !alarming ) 
+        	alarm.set_interval( 0, 0 ); // Turn off alarm
+>>>>>>> 989d29070c32aa8e6b3b615f7722b6a45b047ac4
 
         ptimer.stop();
 
         // Update frame displaysnad box
         win_a.display_frame( frame );
-        win_b.display_frame( bird_frame );
-        win_c.display_frame( hough_frame );
+        //win_b.display_frame( bird_frame );
+        //win_c.display_frame( hough_frame );
         //win_d.display_frame( obj_frame );
         win_e.display_frame( blob_disp );
 
@@ -490,6 +556,68 @@ int main( int argc, char* argv[] ) {
     return 0;
 }
 
+<<<<<<< HEAD
+=======
+inline void drawBoundingBox(cv::Mat &img, cv::Mat &H, cv::Point2f &pos)
+{
+	cv::Mat invH;
+    cv::Point origCarPos;
+    invH = H.inv();
+    pointHomogToPointOrig(invH, pos, origCarPos);
+    int w = 	(int)(0.2f*powf((pos.y/15), 2)
+    		  	+ 3.5f*(pos.y/15) + 46);
+    
+    cv::Rect carBox( origCarPos.x - w / 2 , origCarPos.y - 3 * w / 4, w, w);
+    
+    if (img.channels() != 3)
+    	cvtColor( img, img, CV_GRAY2RGB);
+    	
+    cv::rectangle( img, carBox, cv::Scalar(0, 255, 0), 2, 4, 0 );
+    cv::circle( img, origCarPos, 3, cv::Scalar(0, 255, 255), -1);
+}
+
+inline bool checkAlarm( const cv::Point2f &pos, const cv::Point2f &velo)
+{
+	// http://www.michigan.gov/documents/msp/BrakeTesting-MSP_VehicleEval08_Web_221473_7.pdf
+    // Average was 26.86ft/s^2 or about 8 m/s^2 braking acceleration
+    // For safety, assume max braking of 6 m/s^s
+    if ( ( pos.x > 100 ) && ( pos.x < 300 ) && ( velo.y > 0 ) ) {
+        // Intersected with rear of vehicle, check stopping distance
+        // Ignore x velocity, y should be very very dominant
+        // Convert velocity from pixels per frame to meters per second
+        float vy = velo.y * MPP * FPS;
+        vy = vy > 0 ? vy : 0;
+        float stopdist = ( vy * vy ) / ( 2.0 * 6.0 ); // v^2 / (2*a)
+        float dist = (480 - pos.y) * MPP;
+        DMESG( "obj[" << i <<"] vy: " << vy << " dist: " << dist << " stopdist: " << stopdist << " XY: " << lstart );
+        if ( stopdist > dist ) { // Cannot break within distance
+            // Alert user of potential hazard
+            return true;
+        }
+    }	
+    return false;
+}
+
+inline void printText( cv::Mat disp, const cv::Point text_center, cv::Scalar color, char text_buffer[] )
+{
+	int baseline = 0;
+	cv::Size textSize = cv::getTextSize(text_buffer, CV_FONT_HERSHEY_COMPLEX, 0.55, 1, &baseline);  
+
+	cv::Point 	textOrg;
+    // find text position
+    if ((text_center.x + textSize.width/2) > disp.cols)
+    	textOrg = cv::Point((disp.cols - textSize.width), 
+		  					(text_center.y - textSize.height/2));
+	else if ((text_center.x - textSize.width/2) < 0)
+		textOrg = cv::Point(0, (text_center.y - textSize.height/2));
+	else
+		textOrg = cv::Point((text_center.x - textSize.width/2), 
+		  					(text_center.y - textSize.height/2));
+    cv::putText( disp, text_buffer, textOrg, 
+		CV_FONT_HERSHEY_COMPLEX, 0.55, color);
+}
+
+>>>>>>> 989d29070c32aa8e6b3b615f7722b6a45b047ac4
 inline void lane_marker_filter( const cv::Mat &src, cv::Mat &dst ) {
     int aux;
     int tau_cnt = 0;
