@@ -414,12 +414,11 @@ int main( int argc, char* argv[] ) {
                     float stopdist = ( vy * vy ) / ( 2.0 * 6.0 ); // v^2 / (2*a)
                     float dist = (480 - car_track.objCands[i].filterPos.y) * MPP;
                     DMESG( "obj[" << i <<"] vy: " << vy << " dist: " << dist << " stopdist: " << stopdist << " XY: " << lstart );
-                    if ( stopdist > dist-100*MPP ) { // Cannot break within distance
+                    if ( stopdist > dist ) { // Cannot break within distance
                         // Alert user of potential hazard
                         std::cout << "\033[22;31mALERT!\e[m" << std::endl;
                         if ( !alarming ) alarm.set_interval( 0, 100 );
                         alarming = true;
-       
                     }
                 }
             }
