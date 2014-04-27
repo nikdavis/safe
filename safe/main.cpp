@@ -18,7 +18,7 @@
 
 // Pause after processing each frame
 #define SINGLE_STEP             false
-#define MOTORCYCLE              true
+#define MOTORCYCLE              false
 
 #define PRINT_TIMES             false
 #define PRINT_VP                false
@@ -26,7 +26,7 @@
 #define PRINT_STATS             false
 
 
-#define TEST_ALARM				false
+#define TEST_ALARM				true
 
 
 #define FRAME_SKIP_COUNT        0
@@ -66,7 +66,7 @@ int main( int argc, char* argv[] ) {
     cvwin win_a( "frame" );
     cvwin win_b( "bird_frame" );
     cvwin win_c( "hough_frame" );
-    //cvwin win_d( "obj_frame" );
+    cvwin win_d( "obj_frame" );
     cvwin win_e( "blob display" );
     timer utimer( "Undistort           " );
     timer ltimer( "Lane filter         " );
@@ -165,9 +165,9 @@ int main( int argc, char* argv[] ) {
     // Request and process frames until source indicates EOF
     int frame_count = 0;
     while ( fsrc->get_frame( frame_raw ) == 0 ) {
-       // for ( int i = 0; i < FRAME_SKIP_COUNT; ++i ) {
-       //     if ( fsrc->get_frame( frame_raw ) != 0 ) break;
-       //     }
+        //for ( int i = 0; i < FRAME_SKIP_COUNT; ++i ) {
+         //   if ( fsrc->get_frame( frame_raw ) != 0 ) break;
+         //   }
 
         ptimer.start();
 		frame_count++;
@@ -414,7 +414,8 @@ int main( int argc, char* argv[] ) {
 					  (car_track.objCands[i].filterPos.y + textSize.height/2 + 4));
                 cv::putText( blob_disp, zBuffer, textOrg, 
 					CV_FONT_HERSHEY_COMPLEX, 0.55, cv::Scalar(0, 255, 255));*/
-
+               
+                 drawBoundingBox( frame, H, car_track.objCands[i].filterPos);
 
                 // http://www.michigan.gov/documents/msp/BrakeTesting-MSP_VehicleEval08_Web_221473_7.pdf
                 // Average was 26.86ft/s^2 or about 8 m/s^2 braking acceleration
@@ -429,13 +430,13 @@ int main( int argc, char* argv[] ) {
                     vy = vy > 0 ? vy : 0;
                     float stopdist = ( vy * vy ) / ( 2.0 * 6.0 ); // v^2 / (2*a)
                     float dist = (480 - car_track.objCands[i].filterPos.y) * MPP;
-                    DMESG( "obj[" << i <<"] vy: " << vy << " dist: " << dist << " stopdist: " << stopdist << " XY: " << lstart );
-                    if ( stopdist > dist ) { // Cannot break within distance
+                    DMESG( "obj[" << i <<"] vy: " << vy << " dist: " << dist << " stopdist: " << stopdist << " XY: " << lstart );                  
+                     if ( stopdist > dist -100*MPP) { // Cannot break within distance
                         // Alert user of potential hazard
                         std::cout << "\033[22;31mALERT!\e[m" << std::endl;
                         if ( !alarming ) alarm.set_interval( 0, 100 );
                         alarming = true;
-                    }
+                      }
                 }
             }
         }
@@ -472,7 +473,6 @@ int main( int argc, char* argv[] ) {
 		            
 		            // draw bounding box for the car in the original frame
 		            drawBoundingBox( frame, H, car_track.objCands[i].filterPos);
-
 					if (checkAlarm(car_track.objCands[i].filterPos, car_track.objCands[i].filterVelo)) {
 		            	// Alert user of potential hazard
 		                std::cout << "\033[22;31mALERT!\e[m" << std::endl;
@@ -492,10 +492,10 @@ int main( int argc, char* argv[] ) {
         ptimer.stop();
 
         // Update frame displaysnad box
-        win_a.display_frame( frame );
-        //win_b.display_frame( bird_frame );
-        //win_c.display_frame( hough_frame );
-        //win_d.display_frame( obj_frame );
+        win_a.display_frame( frame ); 
+        win_b.display_frame( bird_frame );
+        win_c.display_frame( hough_frame );
+        win_d.display_frame( obj_frame );
         win_e.display_frame( blob_disp );
 
         if ( PRINT_TIMES ) {
@@ -585,7 +585,7 @@ inline bool checkAlarm( const cv::Point2f &pos, const cv::Point2f &velo)
         vy = vy > 0 ? vy : 0;
         float stopdist = ( vy * vy ) / ( 2.0 * 6.0 ); // v^2 / (2*a)
         float dist = (480 - pos.y) * MPP;
-        DMESG( "obj[" << i <<"] vy: " << vy << " dist: " << dist << " stopdist: " << stopdist << " XY: " << lstart );
+        // DMESG( "obj[" << i <<"] vy: " << vy << " dist: " << dist << " stopdist: " << stopdist << " XY: " << lstart );
         if ( stopdist > dist ) { // Cannot break within distance
             // Alert user of potential hazard
             return true;
