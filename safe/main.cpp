@@ -26,7 +26,7 @@
 #define PRINT_STATS             false
 
 
-#define TEST_ALARM				true
+#define TEST_ALARM				false
 
 
 #define FRAME_SKIP_COUNT        0
@@ -327,16 +327,10 @@ int main( int argc, char* argv[] ) {
         cv::Mat obj_frame;
         bayes_seg.classSeg( bird_frame, obj_frame, OBJ );
         cv::cvtColor( bird_frame, bird_frame, CV_GRAY2RGB);
-        
-        //saveImg( obj_frame, "./frame/obj_frame", frame_count);
 
         //** Perform opening
         cv::Mat kernel = getStructuringElement(cv::MORPH_RECT, cv::Size(5, 5));
         cv::morphologyEx(obj_frame, obj_frame, cv::MORPH_OPEN, kernel);
-		//cv::erode(obj_frame, obj_frame, kernel);
-		//saveImg( obj_frame, "./frame/erode_frame", frame_count);
-		//cv::dilate(obj_frame, obj_frame, kernel);
-		//saveImg( obj_frame, "./frame/dilate_frame", frame_count);
 
         //** Perform blob detection then passing object candidates through
         // temporal filter. Only blobs that show up in a certain consecutive
@@ -355,84 +349,34 @@ int main( int argc, char* argv[] ) {
         }
 
         bool alarming = false;
-        for (unsigned int i = 0; i < car_track.objCands.size(); i++)
-        {
-            // show the center point of all blobs detected
-            cv::circle( bird_frame, car_track.objCands[i].Pos, 3, cv::Scalar(0, 0, 255), -1);
+		if (TEST_ALARM) {
+        	cv::Point2f pos, velo;
+      		car_track.importPos("./position.csv", frame_count, pos, velo);
+      		car_track.testObj.Pos = pos;
+      		car_track.filterVelo(car_track.testObj);
+      		cv::circle( bird_frame, pos, 3, cv::Scalar(0, 255, 0), -1);
+      		
+      		// draw bounding box for the car in the original frame
+			drawBoundingBox( disp_frame, H, car_track.testObj.filterPos);
+      		
+      		char zBuffer[35];
             
-            // Only cars will be calculated position and direction
-            if (car_track.objCands[i].inFilter)
-            {
-                // Currently ignoring EKF, it clearly need absolute velocity to function properly
-                // As is, the EKF is very slow to follow, and exibits odd behavior as it models
-                // a car on the road turning around as it's relative velocity jitters
-                cv::circle( bird_frame, car_track.objCands[i].Pos, 3, cv::Scalar(255, 0, 0), -1);
-                cv::circle( bird_frame, car_track.objCands[i].filterPos, 3, cv::Scalar(0, 255, 0), -1);
-
-                cv::Point2f lstart = car_track.objCands[i].filterPos;
-                cv::Point2f lend = car_track.objCands[i].filterPos + car_track.objCands[i].filterVelo;
-                cv::line( bird_frame, lstart, lend, cv::Scalar(0, 128, 0), 3);
-                lend *= 1000.0; // Make line seg "infinite" for intersection test
-
-                char zBuffer[35];
-                int baseline=0;
-
-                snprintf(zBuffer, 35, "%d", i);
-                cv::Size textSize = cv::getTextSize(zBuffer, CV_FONT_HERSHEY_COMPLEX, 0.55, 1, &baseline);
-
-                // center the text
-                cv::Point textOrg((car_track.objCands[i].filterPos.x - textSize.width/2), 
-					  (car_track.objCands[i].filterPos.y + textSize.height/2));
-                cv::putText( bird_frame, zBuffer, textOrg, 
-					CV_FONT_HERSHEY_COMPLEX, 0.55, cv::Scalar(0, 0, 255));
-
-                snprintf(zBuffer, 35, "%.2f - %.2f", car_track.objCands[i].filterVelo.x, car_track.objCands[i].filterVelo.y);
-                textSize = cv::getTextSize(zBuffer, CV_FONT_HERSHEY_COMPLEX, 0.55, 1, &baseline);  
-
-                // center the text
-                textOrg = cv::Point((car_track.objCands[i].filterPos.x - textSize.width/2), 
-					  (car_track.objCands[i].filterPos.y - textSize.height/2 - 4));
-                cv::putText( bird_frame, zBuffer, textOrg, 
-					CV_FONT_HERSHEY_COMPLEX, 0.55, cv::Scalar(0, 255, 255));
-
-                /*snprintf(zBuffer, 35, "%.3f - %.3f", car_track.objCands[i].filterPos.x, car_track.objCands[i].filterPos.y);
-                textSize = cv::getTextSize(zBuffer, CV_FONT_HERSHEY_COMPLEX, 0.55, 1, &baseline); 
-
-                // center the text
-                textOrg = cv::Point((car_track.objCands[i].filterPos.x - textSize.width/2), 
-					  (car_track.objCands[i].filterPos.y + textSize.height/2 + 4));
-                cv::putText( bird_frame, zBuffer, textOrg, 
-					CV_FONT_HERSHEY_COMPLEX, 0.55, cv::Scalar(0, 255, 255));*/
-               
-                 drawBoundingBox( disp_frame, H, car_track.objCands[i].filterPos);
-
-                // http://www.michigan.gov/documents/msp/BrakeTesting-MSP_VehicleEval08_Web_221473_7.pdf
-                // Average was 26.86ft/s^2 or about 8 m/s^2 braking acceleration
-                // For safety, assume max braking of 6 m/s^s
-                if ( ( car_track.objCands[i].filterPos.x > 100 ) &&
-                     ( car_track.objCands[i].filterPos.x < 300 ) &&
-                     ( car_track.objCands[i].filterVelo.y > 0 ) ) {
-                    // Intersected with rear of vehicle, check stopping distance
-                    // Ignore x velocity, y should be very very dominant
-                    // Convert velocity from pixels per frame to meters per second
-                    float vy = car_track.objCands[i].filterVelo.y * MPP * FPS;
-                    vy = vy > 0 ? vy : 0;
-                    float stopdist = ( vy * vy ) / ( 2.0 * 6.0 ); // v^2 / (2*a)
-                    float dist = (480 - car_track.objCands[i].filterPos.y) * MPP;
-                    DMESG( "obj[" << i <<"] vy: " << vy << " dist: " << dist << " stopdist: " << stopdist << " XY: " << lstart );                  
-                     if ( stopdist > dist -100*MPP) { // Cannot break within distance
-                        // Alert user of potential hazard
-                        std::cout << "\033[22;31mALERT!\e[m" << std::endl;
-                        if ( !alarming ) alarm.set_interval( 0, 100 );
-                        alarming = true;
-                      }
+            snprintf(zBuffer, 35, "%.3f - %.3f", car_track.testObj.filterVelo.x, car_track.testObj.filterVelo.y);
+            printText( bird_frame, car_track.testObj.filterPos, cv::Scalar(0, 255, 120), zBuffer);
+      		
+      		if (checkAlarm(car_track.testObj.filterPos, car_track.testObj.filterVelo)) {
+            	// Alert user of potential hazard
+                std::cout << "\033[22;31mALERT!\e[m" << std::endl;
+                if ( !alarming ) 
+                {
+                	alarm.set_interval( 0, 100 );
+                	//alarm.play_WAV();
                 }
+                alarming = true;
             }
         }
-
-        if ( !alarming ) alarm.set_interval( 0, 0 ); // Turn off alarm
-
-        else {
+        else 
+        {
 		    for (unsigned int i = 0; i < car_track.objCands.size(); i++)
 		    {
 		        // show the center point of all blobs detected
@@ -468,10 +412,7 @@ int main( int argc, char* argv[] ) {
 		                if ( !alarming ) 
 		                	alarm.set_interval( 0, 100 );
 		                alarming = true;
-		            }
-		            
-		            //if (i == 0)
-		            //	car_track.exportPos("./position.csv", car_track.objCands[i].filterPos, car_track.objCands[i].filterVelo);	
+		            }	
 		        }
 		    }
 		}
@@ -511,7 +452,7 @@ int main( int argc, char* argv[] ) {
                 key = cv::waitKey(1);
             }
         }
-    /* Quit if key is ESC or q */
+    	/* Quit if key is ESC or q */
         if(key == 27 || key == 'q') break;
         else if(key == 'u') {
             /* u key switches undistortion on/off. default is off. */
@@ -551,8 +492,8 @@ inline void drawBoundingBox(cv::Mat &img, cv::Mat &H, cv::Point2f &pos)
     cv::Point origCarPos;
     invH = H.inv();
     pointHomogToPointOrig(invH, pos, origCarPos);
-    int w = 	(int)(0.2f*powf((pos.y/15), 2)
-    		  	+ 3.5f*(pos.y/15) + 46);
+    int w = 	(int)(0.18f*powf((pos.y/15), 2)
+    		  	+ 2.5f*(pos.y/15) + 50);
     
     cv::Rect carBox( origCarPos.x - w / 2 , origCarPos.y - 3 * w / 4, w, w);
     
@@ -575,7 +516,7 @@ inline bool checkAlarm( const cv::Point2f &pos, const cv::Point2f &velo)
         float vy = velo.y * MPP * FPS;
         vy = vy > 0 ? vy : 0;
         float stopdist = ( vy * vy ) / ( 2.0 * 6.0 ); // v^2 / (2*a)
-        float dist = (480 - pos.y) * MPP;
+        float dist = (480 - 100 - pos.y) * MPP;
         // DMESG( "obj[" << i <<"] vy: " << vy << " dist: " << dist << " stopdist: " << stopdist << " XY: " << lstart );
         if ( stopdist > dist ) { // Cannot break within distance
             // Alert user of potential hazard
