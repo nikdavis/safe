@@ -23,10 +23,10 @@
 #define PRINT_TIMES             false
 #define PRINT_VP                false
 #define PRINT_ANGLES            false
-#define PRINT_STATS             false
+#define PRINT_STATS             true
 
 
-#define TEST_ALARM				false
+#define TEST_ALARM				true
 
 
 #define FRAME_SKIP_COUNT        0
@@ -99,6 +99,10 @@ int main( int argc, char* argv[] ) {
     float prev_mu, prev_sigma;
     BayesianSegmentation    bayes_seg;
     CarTracking             car_track;
+    
+    if (TEST_ALARM) {
+    	car_track.initVeloKF(car_track.testObj);
+    }
 
     // Force update on first frame
     prev_mu = -1000.0;
@@ -516,9 +520,9 @@ inline bool checkAlarm( const cv::Point2f &pos, const cv::Point2f &velo)
         float vy = velo.y * MPP * FPS;
         vy = vy > 0 ? vy : 0;
         float stopdist = ( vy * vy ) / ( 2.0 * 6.0 ); // v^2 / (2*a)
-        float dist = (480 - 100 - pos.y) * MPP;
+        float dist = (480 - pos.y) * MPP;
         // DMESG( "obj[" << i <<"] vy: " << vy << " dist: " << dist << " stopdist: " << stopdist << " XY: " << lstart );
-        if ( stopdist > dist ) { // Cannot break within distance
+        if ( stopdist > dist - 100*MPP) { // Cannot break within distance
             // Alert user of potential hazard
             return true;
         }
