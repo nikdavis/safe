@@ -63,12 +63,13 @@ int main( int argc, char* argv[] ) {
     sdla alarm( "boop.wav" );
 
     bool undist = false;
-    cvwin win_a( "frame" );
-    cvwin win_b( "bird_frame" );
-    cvwin win_c( "hough_frame" );
-    cvwin win_d( "obj_frame" );
-    cvwin win_e( "blob display" );
-    timer utimer( "Undistort           " );
+    cvwin win_a( "processed frame" );
+    cvwin win_b( "Birds-eye view" );
+    //cvwin win_c( "Lane marking filter" );
+    //cvwin win_d( "obj_frame" );
+    //cvwin win_e( "blob display" );
+    //timer utimer( "Undistort           " );
+    timer gtimer( "Gaussian blur       " );
     timer ltimer( "Lane filter         " );
     timer ctimer( "Canny edge detection" );
     timer htimer( "Hough transform     " );
@@ -81,7 +82,7 @@ int main( int argc, char* argv[] ) {
     timer ptimer( "Process frame       " );
     frame_source* fsrc = NULL;
 
-    cv::Mat frame_raw, frame, lmf_frame, hough_frame, bird_frame, obj_frame;
+    cv::Mat frame, half_frame, disp_frame, lmf_frame, hough_frame, bird_frame;
     MSAC msac;
     cv::Size image_size;
     double gammaInit, thetaInit;
@@ -93,8 +94,8 @@ int main( int argc, char* argv[] ) {
         gammaInit = 1.5;
     }
 
-    Kalman1D theta(thetaInit, 0.05f, 0.00005f);       /* Kalman filters for Theta, Gamma */
-    Kalman1D gamma(gammaInit, 0.05f, 0.00005f);        /* init val, measure var, proc var */
+    Kalman1D theta(thetaInit, 0.02f, 0.00005f);       /* Kalman filters for Theta, Gamma */
+    Kalman1D gamma(gammaInit, 0.02f, 0.00005f);        /* init val, measure var, proc var */
     float prev_mu, prev_sigma;
     BayesianSegmentation    bayes_seg;
     CarTracking             car_track;
@@ -160,46 +161,49 @@ int main( int argc, char* argv[] ) {
     float prev_y = fsrc->frame_height() / 2.0;
 
     // Set dst frame size for lane marker filter once
-    lmf_frame = cv::Mat::zeros( image_size.height, image_size.width, CV_8UC1 );
+    lmf_frame = cv::Mat::zeros( image_size.height/2, image_size.width, CV_8UC1 );
 
     // Request and process frames until source indicates EOF
     int frame_count = 0;
-    while ( fsrc->get_frame( frame_raw ) == 0 ) {
-        //for ( int i = 0; i < FRAME_SKIP_COUNT; ++i ) {
-         //   if ( fsrc->get_frame( frame_raw ) != 0 ) break;
-         //   }
+    while ( fsrc->get_frame( frame ) == 0 ) {
+        /*for ( int i = 0; i < FRAME_SKIP_COUNT; ++i ) {
+            if ( fsrc->get_frame( frame_raw ) != 0 ) break;
+        }*/
 
         ptimer.start();
 		frame_count++;
+
         /* Explicitly undistorting our FireflyMV camera */
-        utimer.start();
+        /*utimer.start();
         if ( undist ) {
             cv::undistort(frame_raw, frame, cameraMat, distCoeffMat);
         } else {
             frame = frame_raw;
         }
-        utimer.stop();
-        
-
-        //cv::flip( frame, frame, 1);
+        utimer.stop();*/
 
         cv::flip( frame, frame, 1);
+        disp_frame = frame;
+        cv::cvtColor( disp_frame, disp_frame, CV_GRAY2RGB );
 
+        // Throw away upper 1/2 of frame
+        cv::Mat(frame, cv::Rect(0,frame.rows>>1,frame.cols,frame.rows>>1)).copyTo(half_frame);
 
         /* Gaussian helps preprocess noise out for LMF/Canny/Hough */
-        cv::GaussianBlur( frame, frame, cv::Size(3, 3), 0, 0 );
-        cv::GaussianBlur( frame, frame, cv::Size(3, 3), 0, 0 );
+        gtimer.start();
+        cv::GaussianBlur( half_frame, half_frame, cv::Size(9, 9), 0, 0 );
+        gtimer.stop();
 
         //** Filter frame for gradient steps up/down horizontally -> lmf_frame
         ltimer.start();
-        lane_marker_filter( frame, lmf_frame );
+        lane_marker_filter( half_frame, lmf_frame );
         //cv::normalize( lmf_frame, lmf_frame, 0, 255, cv::NORM_MINMAX, CV_8UC1 );
         ltimer.stop();
 
         //** Perform Canny edge detection on lmf_frame -> lmf_frame
         ctimer.start();
         // src, dst, low threshold, high threshold, kernel size, accurate
-        cv::Canny( lmf_frame, lmf_frame, 60, 170, 3, false );
+        cv::Canny( lmf_frame, lmf_frame, 200, 240, 3, false );
         ctimer.stop();
 
         //** Perform Hough transform on lmf_frame, generating vector of lines
@@ -208,21 +212,8 @@ int main( int argc, char* argv[] ) {
         // src, dst vec, rho, theta, threshold, min length, max gap
         // rho - distance resolution of accumulator in pixels
         // theta - angle resolution of accumulator in pixels
-        cv::HoughLinesP( lmf_frame, hlines, 3, CV_PI / 60.0, 40, 40, 10 );
+        cv::HoughLinesP( lmf_frame, hlines, 3, CV_PI / 60.0, 50, 20, 10 );
         htimer.stop();
-
-        // Visualize Hough transform results
-        cv::cvtColor( lmf_frame, hough_frame, CV_GRAY2BGR );
-        //show_hough( hough_frame, hlines );
-
-        // Show intersections of every point
-        /*cv::Point intersect;
-        size_t line_count = hlines.size();
-        for( size_t i = 0; i < line_count; ++i )
-            for ( size_t j = i + 1; j < line_count; ++j )
-                if ( calc_intersect( hlines[i], hlines[j], intersect ) )
-                    draw_cross( hough_frame, intersect,
-                                cv::Scalar(0,255,0), 3 );*/
 
         //** RANSAC hough line intersections for vanishing point
         rtimer.start();
@@ -236,9 +227,9 @@ int main( int argc, char* argv[] ) {
         {
             cv::Point pt1, pt2;
             pt1.x = hlines[i][0];
-            pt1.y = hlines[i][1];
+            pt1.y = hlines[i][1]+(frame.rows>>1);
             pt2.x = hlines[i][2];
-            pt2.y = hlines[i][3];
+            pt2.y = hlines[i][3]+(frame.rows>>1);
 
             // Store into vector of pairs of Points for MSAC
             aux.clear();
@@ -248,7 +239,7 @@ int main( int argc, char* argv[] ) {
         }
         vp_detected = msac.VPEstimation( lineSegments, lineSegmentsClusters, numInliers, _vp );
         rtimer.stop();
-        if ( vp_detected ) msac.drawCS( hough_frame, lineSegmentsClusters, _vp );
+        if ( vp_detected ) msac.drawCS( disp_frame, lineSegmentsClusters, _vp );
 
         /* Process Kalman */
         ktimer.start();
@@ -295,11 +286,11 @@ int main( int argc, char* argv[] ) {
             gamma.skipMeas();
         }
         ktimer.stop();
-        draw_cross( hough_frame, cv::Point( vp(0,0), vp(1,0) ),
+        draw_cross( disp_frame, cv::Point( vp(0,0), vp(1,0) ),
                                  cv::Scalar( 0, 255, 0 ), 4 );
 		cv::Point filter_vp;
 		calcVpFromAngles(theta.xHat, gamma.xHat, filter_vp); 
-		cv::circle( hough_frame, filter_vp, 3, cv::Scalar(0, 255, 255 ), 4 );
+		cv::circle( disp_frame, filter_vp, 3, cv::Scalar(0, 255, 255 ), 4 );
                         
         /* Generate IPM or BIRDS-EYE view with plane-to-plane homography */
         hmtimer.start();
@@ -333,7 +324,9 @@ int main( int argc, char* argv[] ) {
         etimer.stop();
 
         //** Create object image
+        cv::Mat obj_frame;
         bayes_seg.classSeg( bird_frame, obj_frame, OBJ );
+        cv::cvtColor( bird_frame, bird_frame, CV_GRAY2RGB);
         
         //saveImg( obj_frame, "./frame/obj_frame", frame_count);
 
@@ -353,23 +346,19 @@ int main( int argc, char* argv[] ) {
         car_track.detect_filter( obj_frame );
         btimer.stop();
 
-        //** Find the blob bounding boxes then display them.
+        //** Find the blob bounding boxes
         car_track.findBoundContourBox( obj_frame );
 
-        cv::Mat blob_disp = obj_frame.clone();
-        cv::cvtColor( blob_disp, blob_disp, CV_GRAY2RGB);
+        //** Then display them on the birds-eye frame
         for (unsigned int i = 0; i < car_track.boundRect.size(); i++) {
-            cv::rectangle( blob_disp, car_track.boundRect[i], cv::Scalar(255, 0, 0), 2, 4, 0 );
+            cv::rectangle( bird_frame, car_track.boundRect[i], cv::Scalar(255, 0, 0), 2, 4, 0 );
         }
-
-       
-		cv::cvtColor( frame, frame, CV_GRAY2RGB );
 
         bool alarming = false;
         for (unsigned int i = 0; i < car_track.objCands.size(); i++)
         {
             // show the center point of all blobs detected
-            cv::circle( blob_disp, car_track.objCands[i].Pos, 3, cv::Scalar(0, 0, 255), -1);
+            cv::circle( bird_frame, car_track.objCands[i].Pos, 3, cv::Scalar(0, 0, 255), -1);
             
             // Only cars will be calculated position and direction
             if (car_track.objCands[i].inFilter)
@@ -377,12 +366,12 @@ int main( int argc, char* argv[] ) {
                 // Currently ignoring EKF, it clearly need absolute velocity to function properly
                 // As is, the EKF is very slow to follow, and exibits odd behavior as it models
                 // a car on the road turning around as it's relative velocity jitters
-                cv::circle( blob_disp, car_track.objCands[i].Pos, 3, cv::Scalar(255, 0, 0), -1);
-                cv::circle( blob_disp, car_track.objCands[i].filterPos, 3, cv::Scalar(0, 255, 0), -1);
+                cv::circle( bird_frame, car_track.objCands[i].Pos, 3, cv::Scalar(255, 0, 0), -1);
+                cv::circle( bird_frame, car_track.objCands[i].filterPos, 3, cv::Scalar(0, 255, 0), -1);
 
                 cv::Point2f lstart = car_track.objCands[i].filterPos;
                 cv::Point2f lend = car_track.objCands[i].filterPos + car_track.objCands[i].filterVelo;
-                cv::line( blob_disp, lstart, lend, cv::Scalar(0, 128, 0), 3);
+                cv::line( bird_frame, lstart, lend, cv::Scalar(0, 128, 0), 3);
                 lend *= 1000.0; // Make line seg "infinite" for intersection test
 
                 char zBuffer[35];
@@ -394,16 +383,16 @@ int main( int argc, char* argv[] ) {
                 // center the text
                 cv::Point textOrg((car_track.objCands[i].filterPos.x - textSize.width/2), 
 					  (car_track.objCands[i].filterPos.y + textSize.height/2));
-                cv::putText( blob_disp, zBuffer, textOrg, 
+                cv::putText( bird_frame, zBuffer, textOrg, 
 					CV_FONT_HERSHEY_COMPLEX, 0.55, cv::Scalar(0, 0, 255));
 
-                snprintf(zBuffer, 35, "%.3f - %.3f", car_track.objCands[i].filterVelo.x, car_track.objCands[i].filterVelo.y);
+                snprintf(zBuffer, 35, "%.2f - %.2f", car_track.objCands[i].filterVelo.x, car_track.objCands[i].filterVelo.y);
                 textSize = cv::getTextSize(zBuffer, CV_FONT_HERSHEY_COMPLEX, 0.55, 1, &baseline);  
 
                 // center the text
                 textOrg = cv::Point((car_track.objCands[i].filterPos.x - textSize.width/2), 
 					  (car_track.objCands[i].filterPos.y - textSize.height/2 - 4));
-                cv::putText( blob_disp, zBuffer, textOrg, 
+                cv::putText( bird_frame, zBuffer, textOrg, 
 					CV_FONT_HERSHEY_COMPLEX, 0.55, cv::Scalar(0, 255, 255));
 
                 /*snprintf(zBuffer, 35, "%.3f - %.3f", car_track.objCands[i].filterPos.x, car_track.objCands[i].filterPos.y);
@@ -412,10 +401,10 @@ int main( int argc, char* argv[] ) {
                 // center the text
                 textOrg = cv::Point((car_track.objCands[i].filterPos.x - textSize.width/2), 
 					  (car_track.objCands[i].filterPos.y + textSize.height/2 + 4));
-                cv::putText( blob_disp, zBuffer, textOrg, 
+                cv::putText( bird_frame, zBuffer, textOrg, 
 					CV_FONT_HERSHEY_COMPLEX, 0.55, cv::Scalar(0, 255, 255));*/
                
-                 drawBoundingBox( frame, H, car_track.objCands[i].filterPos);
+                 drawBoundingBox( disp_frame, H, car_track.objCands[i].filterPos);
 
                 // http://www.michigan.gov/documents/msp/BrakeTesting-MSP_VehicleEval08_Web_221473_7.pdf
                 // Average was 26.86ft/s^2 or about 8 m/s^2 braking acceleration
@@ -447,7 +436,7 @@ int main( int argc, char* argv[] ) {
 		    for (unsigned int i = 0; i < car_track.objCands.size(); i++)
 		    {
 		        // show the center point of all blobs detected
-		        cv::circle( blob_disp, car_track.objCands[i].Pos, 3, cv::Scalar(0, 0, 255), -1);
+		        cv::circle( bird_frame, car_track.objCands[i].Pos, 3, cv::Scalar(0, 0, 255), -1);
 		        
 		        // Only cars will be calculated position and direction
 		        if (car_track.objCands[i].inFilter)
@@ -455,24 +444,24 @@ int main( int argc, char* argv[] ) {
 		            // Currently ignoring EKF, it clearly need absolute velocity to function properly
 		            // As is, the EKF is very slow to follow, and exibits odd behavior as it models
 		            // a car on the road turning around as it's relative velocity jitters
-		            cv::circle( blob_disp, car_track.objCands[i].Pos, 		3, cv::Scalar(255, 0, 0), -1);
-		            cv::circle( blob_disp, car_track.objCands[i].filterPos, 3, cv::Scalar(0, 255, 0), -1);
+		            cv::circle( bird_frame, car_track.objCands[i].Pos, 		3, cv::Scalar(255, 0, 0), -1);
+		            cv::circle( bird_frame, car_track.objCands[i].filterPos, 3, cv::Scalar(0, 255, 0), -1);
 
 		            cv::Point2f lstart = car_track.objCands[i].filterPos;
 		            cv::Point2f lend = car_track.objCands[i].filterPos + car_track.objCands[i].filterVelo;
-		            cv::line( blob_disp, lstart, lend, cv::Scalar(0, 128, 0), 3);
+		            cv::line( bird_frame, lstart, lend, cv::Scalar(0, 128, 0), 3);
 		            lend *= 1000.0; // Make line seg "infinite" for intersection test
 
 		            char zBuffer[35];
 		            
 		            snprintf(zBuffer, 35, "%d", i);
-		            printText( blob_disp, car_track.objCands[i].filterPos, cv::Scalar(0, 0, 255), zBuffer);
+		            printText( bird_frame, car_track.objCands[i].filterPos, cv::Scalar(0, 0, 255), zBuffer);
 		            
 		            snprintf(zBuffer, 35, "%.3f - %.3f", car_track.objCands[i].filterVelo.x, car_track.objCands[i].filterVelo.y);
-		            printText( blob_disp, car_track.objCands[i].filterPos, cv::Scalar(0, 255, 120), zBuffer);
+		            printText( bird_frame, car_track.objCands[i].filterPos, cv::Scalar(0, 255, 120), zBuffer);
 		            
 		            // draw bounding box for the car in the original frame
-		            drawBoundingBox( frame, H, car_track.objCands[i].filterPos);
+		            drawBoundingBox( disp_frame, H, car_track.objCands[i].filterPos);
 					if (checkAlarm(car_track.objCands[i].filterPos, car_track.objCands[i].filterVelo)) {
 		            	// Alert user of potential hazard
 		                std::cout << "\033[22;31mALERT!\e[m" << std::endl;
@@ -492,15 +481,16 @@ int main( int argc, char* argv[] ) {
         ptimer.stop();
 
         // Update frame displaysnad box
-        win_a.display_frame( frame ); 
+        win_a.display_frame( disp_frame ); 
         win_b.display_frame( bird_frame );
-        win_c.display_frame( hough_frame );
-        win_d.display_frame( obj_frame );
-        win_e.display_frame( blob_disp );
+        //win_c.display_frame( lmf_frame );
+        //win_d.display_frame( obj_frame );
+        //win_e.display_frame( blob_disp );
 
         if ( PRINT_TIMES ) {
             // Print timer results
-            utimer.printu();
+            //utimer.printu();
+            gtimer.printu();
             ltimer.printu();
             ctimer.printu();
             htimer.printu();
@@ -532,7 +522,8 @@ int main( int argc, char* argv[] ) {
 
     if ( PRINT_TIMES ) {
         // Print average timer results
-        utimer.aprintu();
+        //utimer.aprintu();
+        gtimer.aprintu();
         ltimer.aprintu();
         ctimer.aprintu();
         htimer.aprintu();
@@ -618,14 +609,14 @@ inline void lane_marker_filter( const cv::Mat &src, cv::Mat &dst ) {
     int tau_cnt = 0;
     int tau = ROTATE_TAU ? MIN_TAU : TAU;
 
-    for ( int row = src.rows / 2; row < src.rows; ++row ) {
+    for ( int row = 0; row < src.rows; ++row ) {
         const uchar *s = src.ptr<uchar>(row);
         uchar *d = dst.ptr<uchar>(row);
 
         for ( int col = 0; col < src.cols; ++col ) {
             // Check that we're within kernel size
             if ( ( col >= tau ) && ( col <  (src.cols - tau ) ) &&
-                ( row > ( ( src.rows / 2 ) + LANE_FILTER_ROW_OFFSET ) ) ) {
+                ( row > ( LANE_FILTER_ROW_OFFSET ) ) ) {
                 // Filter from Nieto 2010
                 aux = 2 * s[col];
                 aux -= s[col - tau];
@@ -637,7 +628,7 @@ inline void lane_marker_filter( const cv::Mat &src, cv::Mat &dst ) {
             }
             else d[col] = 0;
         }
-        if ( row > ( ( src.rows / 2 ) + LANE_FILTER_ROW_OFFSET ) ) {
+        if ( row > (  LANE_FILTER_ROW_OFFSET ) ) {
             ++tau_cnt;
             if ( ( tau_cnt % ( ( src.rows / 2 ) / TAU_DELTA ) ) == 0 ) ++tau;
         }

@@ -211,7 +211,8 @@ void CarTracking::cvtCoord(const Point2f &orig, Point2f &cvt, const Mat &img)
 * --------------------------------------------------------------------------------*/
 /* This function will find the bounding contour boxes. The bounding boxes
  * is contained in the vector 'boundRect'.
- * NOTE: the function only bounds blobs whose sizes are greater than MIN_BOUND_BOX_EREA'
+ * NOTE: the function only bounds blobs whose sizes are greater than MIN_BLOB_AREA
+ * and less than MAX_BLOB_AREA
  */
 void CarTracking::findBoundContourBox(const Mat &img)
 {
@@ -228,11 +229,11 @@ void CarTracking::findBoundContourBox(const Mat &img)
 		boundRect[i] = boundingRect(Mat(contours_poly[i]));
 	}
 
-	// Erase vector element that its size is less than 'MIN_BOUND_BOX_EREA'
+	// Erase vector element that its size is less than 'MIN_BLOB_AREA'
 	vector< Rect >::iterator it;
 	for (it = boundRect.begin(); it != boundRect.end();)
 	{
-		if (it->area() < MIN_BOUND_BOX_EREA)
+		if ( (it->area() < MIN_BLOB_AREA) && (it->area() < MAX_BLOB_AREA))
 			it = boundRect.erase(it);
 		else
 			it++;

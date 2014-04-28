@@ -13,13 +13,12 @@
 #define ekfdt               ( EKF_DELAY_MS / 1000.0 )
 
 // Define for temporal filter
-#define NUM_IN_FRAMES		( 3 )
-#define NUM_OUT_FRAMES		( 4 )
+#define NUM_IN_FRAMES		( 2 )
+#define NUM_OUT_FRAMES		( 3 )
 #define ERR_BOX_SIZE_PX		( 25 )
 #define MAX_GAP_PX			( 20 )
-#define MIN_BLOB_AREA		( 5000.0f )
-#define MAX_BLOB_AREA		( 50000.0f )
-#define MIN_BOUND_BOX_EREA	( 1400 )
+#define MIN_BLOB_AREA		( 3000.0f )
+#define MAX_BLOB_AREA		( 25000.0f )
 #define PX_FEET_SCALE		( 50.0f/330.0f )
 
 #define POS_LIST_LENGTH		( 5 )
