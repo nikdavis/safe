@@ -9,10 +9,10 @@ LIBS += `sdl-config --libs`
 OBJS += lmmin.o errorNIETO.o MSAC.o fireflymv_camera.o fsource.o cvwin.o
 OBJS += timer.o homography.o kalman.o bayesSeg.o sdla.o carTracking.o EKF.o main.o
 
-default : CFLAGS += -O2
+default : CFLAGS += -O3
 default : $(OUTPUT)
 
-board : CFLAGS += -O2 -march=native
+board : CFLAGS += -O3 -march=native
 board : $(OUTPUT)
 
 debug : CFLAGS += -g -DDEBUG

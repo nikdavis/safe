@@ -20,19 +20,18 @@
 #define SINGLE_STEP             false
 #define MOTORCYCLE              false
 
-#define PRINT_TIMES             false
+#define PRINT_TIMES             true
 #define PRINT_VP                false
 #define PRINT_ANGLES            false
-#define PRINT_STATS             true
+#define PRINT_STATS             false
 
 
-#define TEST_ALARM				true
-
+#define TEST_ALARM              false
+#define RECORD                  false
 
 #define FRAME_SKIP_COUNT        0
 #define FPS                     30.0        // Frames per second (5ft/19pxl)
 #define MPP                     0.0802105   // Meters per pixel
-
 
 inline void drawBoundingBox(cv::Mat &img, cv::Mat &H, cv::Point2f &pos);
 inline void printText( cv::Mat disp, const cv::Point text_center, cv::Scalar color, char text_buffer[] );
@@ -65,20 +64,17 @@ int main( int argc, char* argv[] ) {
     bool undist = false;
     cvwin win_a( "processed frame" );
     cvwin win_b( "Birds-eye view" );
-    //cvwin win_c( "Lane marking filter" );
-    //cvwin win_d( "obj_frame" );
-    //cvwin win_e( "blob display" );
-    //timer utimer( "Undistort           " );
-    timer gtimer( "Gaussian blur       " );
-    timer ltimer( "Lane filter         " );
-    timer ctimer( "Canny edge detection" );
-    timer htimer( "Hough transform     " );
-    timer rtimer( "RANSAC              " );
-    timer ktimer( "Kalman filter VP    " );
-    timer hmtimer( "Homography          " );
-    timer etimer( "EM update           " );
-    timer itimer( "EM initialization   " );
-    timer btimer( "Blob detection      " );
+
+    //timer gtimer( "Gaussian blur       " );
+    //timer ltimer( "Lane filter         " );
+    //timer ctimer( "Canny edge detection" );
+    //timer htimer( "Hough transform     " );
+    //timer rtimer( "RANSAC              " );
+    //timer ktimer( "Kalman filter VP    " );
+    //timer hmtimer( "Homography          " );
+    //timer etimer( "EM update           " );
+    //timer itimer( "EM initialization   " );
+    //timer btimer( "Blob detection      " );
     timer ptimer( "Process frame       " );
     frame_source* fsrc = NULL;
 
@@ -102,6 +98,16 @@ int main( int argc, char* argv[] ) {
     
     if (TEST_ALARM) {
     	car_track.initVeloKF(car_track.testObj);
+    }
+
+    cv::VideoWriter outputVideo;
+    if ( RECORD ) {
+        outputVideo.open("recording.avi", CV_FOURCC('D','X','5','0'), 30, cv::Size(640, 480), true);
+        if (!outputVideo.isOpened())
+        {
+            std::cerr << "Failed to open rec.mp4 for output." << std::endl;
+            return -1;
+        }
     }
 
     // Force update on first frame
@@ -194,33 +200,33 @@ int main( int argc, char* argv[] ) {
         cv::Mat(frame, cv::Rect(0,frame.rows>>1,frame.cols,frame.rows>>1)).copyTo(half_frame);
 
         /* Gaussian helps preprocess noise out for LMF/Canny/Hough */
-        gtimer.start();
+        //gtimer.start();
         cv::GaussianBlur( half_frame, half_frame, cv::Size(9, 9), 0, 0 );
-        gtimer.stop();
+        //gtimer.stop();
 
         //** Filter frame for gradient steps up/down horizontally -> lmf_frame
-        ltimer.start();
+        //ltimer.start();
         lane_marker_filter( half_frame, lmf_frame );
         //cv::normalize( lmf_frame, lmf_frame, 0, 255, cv::NORM_MINMAX, CV_8UC1 );
-        ltimer.stop();
+        //ltimer.stop();
 
         //** Perform Canny edge detection on lmf_frame -> lmf_frame
-        ctimer.start();
+        //ctimer.start();
         // src, dst, low threshold, high threshold, kernel size, accurate
         cv::Canny( lmf_frame, lmf_frame, 200, 240, 3, false );
-        ctimer.stop();
+        //ctimer.stop();
 
         //** Perform Hough transform on lmf_frame, generating vector of lines
-        htimer.start();
+        //htimer.start();
         std::vector<cv::Vec4i> hlines;
         // src, dst vec, rho, theta, threshold, min length, max gap
         // rho - distance resolution of accumulator in pixels
         // theta - angle resolution of accumulator in pixels
         cv::HoughLinesP( lmf_frame, hlines, 3, CV_PI / 60.0, 50, 20, 10 );
-        htimer.stop();
+        //htimer.stop();
 
         //** RANSAC hough line intersections for vanishing point
-        rtimer.start();
+        //rtimer.start();
         cv::Mat _vp;    // Temporary holder
         std::vector<cv::Point> aux;
         std::vector<std::vector<cv::Point> > lineSegments;
@@ -242,22 +248,27 @@ int main( int argc, char* argv[] ) {
             lineSegments.push_back( aux );
         }
         vp_detected = msac.VPEstimation( lineSegments, lineSegmentsClusters, numInliers, _vp );
-        rtimer.stop();
+        //rtimer.stop();
         if ( vp_detected ) msac.drawCS( disp_frame, lineSegmentsClusters, _vp );
 
         /* Process Kalman */
-        ktimer.start();
+        //ktimer.start();
         cv::Mat_<float> pvp(2,1);
         float thetaAng, gammaAng, thetaDelta, gammaDelta, xdelta, ydelta;
         if( vp_detected ) {
             /* Ensure VP values are not NaN! Default to center of frame */
-            if ( IS_NAN(_vp.at<float>(0,0)) || IS_NAN(_vp.at<float>(1,0)) ) {
+            if ( IS_NAN( _vp.at<float>(0,0) ) ) {
                 pvp(0) = fsrc->frame_width() / 2.0;
-                pvp(1) = fsrc->frame_height() / 2.0;
             }
             else {
                 /* Convert _vp from RANSAC to something Kalman filter likes, 2x1 Mat */
                 pvp(0) = _vp.at<float>(0,0);
+            }
+            if ( IS_NAN( _vp.at<float>(1,0) ) ) {
+                pvp(1) = fsrc->frame_height() / 2.0;
+            }
+            else {
+                /* Convert _vp from RANSAC to something Kalman filter likes, 2x1 Mat */
                 pvp(1) = _vp.at<float>(1,0);
             }
             
@@ -289,19 +300,24 @@ int main( int argc, char* argv[] ) {
             theta.skipMeas();
             gamma.skipMeas();
         }
-        ktimer.stop();
+        //ktimer.stop();
         draw_cross( disp_frame, cv::Point( vp(0,0), vp(1,0) ),
                                  cv::Scalar( 0, 255, 0 ), 4 );
+
+        /* Ensure angle values are not NaN! Default to center of frame */
+        if ( IS_NAN( theta.xHat ) ) theta.xHat = thetaInit;
+        if ( IS_NAN( gamma.xHat ) ) gamma.xHat = gammaInit;
+
 		cv::Point filter_vp;
 		calcVpFromAngles(theta.xHat, gamma.xHat, filter_vp); 
 		cv::circle( disp_frame, filter_vp, 3, cv::Scalar(0, 255, 255 ), 4 );
                         
         /* Generate IPM or BIRDS-EYE view with plane-to-plane homography */
-        hmtimer.start();
+        //hmtimer.start();
         cv::Mat H;
         generateHomogMat(H, -theta.xHat, -gamma.xHat);
         planeToPlaneHomog(frame, bird_frame, H, 400);
-        hmtimer.stop();
+        //hmtimer.stop();
 
         /* Printing prints estimates of the angles, not raw */
         if ( PRINT_ANGLES ) DMESG( "ANGLE: " << theta.xHat << "," << gamma.xHat );
@@ -312,20 +328,21 @@ int main( int argc, char* argv[] ) {
         if ( PRINT_STATS ) DMESG( "MU: " << mu << " SIGMA: " << sigma );
         
         //** If stats significantly different from last frame, reseed EM algor.
-        itimer.start();
+        //itimer.start();
         if ( ( abs( mu    - prev_mu    ) > MU_DELTA    ) ||
              ( abs( sigma - prev_sigma ) > SIGMA_DELTA ) ) {
-            DMESG( "Significant stat. deltas, reseeding EM algorithm" );
+            if ( PRINT_STATS )
+                DMESG( "Significant stat. deltas, reseeding EM algorithm" );
             bayes_seg.autoInitEM( bird_frame );
         }
         prev_mu = mu;
         prev_sigma = sigma;
-        itimer.stop();
+        //itimer.stop();
 
         //** Update EM
-        etimer.start();
+        //etimer.start();
         bayes_seg.EM_Bayes( bird_frame );
-        etimer.stop();
+        //etimer.stop();
 
         //** Create object image
         cv::Mat obj_frame;
@@ -340,9 +357,9 @@ int main( int argc, char* argv[] ) {
         // temporal filter. Only blobs that show up in a certain consecutive
         // frame are considered as cars. And only cars are passed through 
         // the extended Kalman filter.
-        btimer.start();
+        //btimer.start();
         car_track.detect_filter( obj_frame );
-        btimer.stop();
+        //btimer.stop();
 
         //** Find the blob bounding boxes
         car_track.findBoundContourBox( obj_frame );
@@ -398,7 +415,6 @@ int main( int argc, char* argv[] ) {
 		            cv::Point2f lstart = car_track.objCands[i].filterPos;
 		            cv::Point2f lend = car_track.objCands[i].filterPos + car_track.objCands[i].filterVelo;
 		            cv::line( bird_frame, lstart, lend, cv::Scalar(0, 128, 0), 3);
-		            lend *= 1000.0; // Make line seg "infinite" for intersection test
 
 		            char zBuffer[35];
 		            
@@ -425,27 +441,26 @@ int main( int argc, char* argv[] ) {
 
         ptimer.stop();
 
+        if ( RECORD ) outputVideo << disp_frame;
+
         // Update frame displaysnad box
         win_a.display_frame( disp_frame ); 
         win_b.display_frame( bird_frame );
-        //win_c.display_frame( lmf_frame );
-        //win_d.display_frame( obj_frame );
-        //win_e.display_frame( blob_disp );
+
 
         if ( PRINT_TIMES ) {
             // Print timer results
-            //utimer.printu();
-            gtimer.printu();
-            ltimer.printu();
-            ctimer.printu();
-            htimer.printu();
-            rtimer.printu();
-            ktimer.printu();
-            hmtimer.printu();
-            itimer.printu();
-            etimer.printu();
-            btimer.printu();
-            ptimer.printm();
+            //gtimer.printu();
+            //ltimer.printu();
+            //ctimer.printu();
+            //htimer.printu();
+            //rtimer.printu();
+            //ktimer.printu();
+            //hmtimer.printu();
+            //itimer.printu();
+            //etimer.printu();
+            //btimer.printu();
+            //ptimer.printm();
             std::cout << std::endl;
         }
 
@@ -467,17 +482,16 @@ int main( int argc, char* argv[] ) {
 
     if ( PRINT_TIMES ) {
         // Print average timer results
-        //utimer.aprintu();
-        gtimer.aprintu();
-        ltimer.aprintu();
-        ctimer.aprintu();
-        htimer.aprintu();
-        rtimer.aprintu();
-        ktimer.aprintu();
-        hmtimer.aprintu();
-        itimer.aprintu();
-        etimer.aprintu();
-        btimer.aprintu();
+        //gtimer.aprintu();
+        //ltimer.aprintu();
+        //ctimer.aprintu();
+        //htimer.aprintu();
+        //rtimer.aprintu();
+        //ktimer.aprintu();
+        //hmtimer.aprintu();
+        //itimer.aprintu();
+        //etimer.aprintu();
+        //btimer.aprintu();
         ptimer.aprintm();
     }
 

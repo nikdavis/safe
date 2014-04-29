@@ -43,14 +43,14 @@ void calcAnglesFromVP(cv::Mat &vp, float &theta, float &gamma) {
 	gamma = atan( - vpCamCoord.at<float>(0,0) / cos(theta) );
 	
 	/* To degrees */
-	theta = theta * 180.0 / CV_PI;
-	gamma = gamma * 180.0 / CV_PI;
+	theta = theta * (180.0 / CV_PI);
+	gamma = gamma * (180.0 / CV_PI);
 }
 
 void calcVpFromAngles(const float &theta, const float &gamma, cv::Point &vp)
 {
-	float ftheta = theta * CV_PI / 180.0f;	
-	float fgamma = gamma * CV_PI / 180.0f;
+	float ftheta = theta * (CV_PI / 180.0f);
+	float fgamma = gamma * (CV_PI / 180.0f);
 		
 	cv::Mat vpCamCoord(3, 1, CV_32FC1);
 	vpCamCoord.at<float>(0,0) = -tan(fgamma)*cos(ftheta);
@@ -67,8 +67,8 @@ void calcVpFromAngles(const float &theta, const float &gamma, cv::Point &vp)
 void calcVPFromAngles(int &x, int &y, float gamma, float theta) {
 	float ga, th;
     cv::Mat vpCam = cv::Mat::zeros( 3, 1, CV_32FC1);
-	ga = gamma * CV_PI / 180.0;
-	th = theta * CV_PI / 180.0;
+	ga = gamma * (CV_PI / 180.0);
+	th = theta * (CV_PI / 180.0);
 	ga = - tan( ga ) * cos( th );
 	th = tan ( th );
 	vpCam.at<float>(0,0) = ga;
@@ -108,12 +108,12 @@ void planeToPlaneHomog(cv::Mat &in, cv::Mat &out, cv::Mat &H, int outputWidth) {
  * The arguments are passed in units of DEGREES. X and y represent
  * the new image size desired. */
 void generateHomogMat(cv::Mat &H, float theta, float gamma) {
-	float beta = gamma;		/* Due to the order of our rotations gamma (Y-axis) gets mapped to beta (Z-axis) */
-	theta = theta - 90;		/* Turn camera downward */
+	float beta = gamma;     /* Due to the order of our rotations gamma (Y-axis) gets mapped to beta (Z-axis) */
+	theta = theta - 90.0;   /* Turn camera downward */
 
 	/* Convert to rads */
-	theta = theta * CV_PI / 180.0;
-	beta = beta * CV_PI / 180.0;
+	theta = theta * (CV_PI / 180.0);
+	beta = beta * (CV_PI / 180.0);
 
     cv::Mat A1 = (cv::Mat_<float>(4,3) <<
         1, 0, -OUTPUT_SIZE_X/2,
