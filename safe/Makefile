@@ -23,7 +23,7 @@ all: ${OUTPUT}
 $(OUTPUT) : $(OBJS)
 	$(CC) -o $(OUTPUT) $(OBJS) $(LIBS)
 
-main.o : main.cpp defs.hpp fsource.hpp cvwin.hpp timer.hpp MSAC.hpp kalman.hpp bayesSeg.hpp carTracking.hpp sdla.hpp
+main.o : main.cpp defs.hpp fsource.hpp cvwin.hpp timer.hpp MSAC.hpp kalman.hpp homography.hpp bayesSeg.hpp carTracking.hpp sdla.hpp
 	$(CC) $(CFLAGS) -c main.cpp
 
 sdla.o : sdla.cpp defs.hpp sdla.hpp

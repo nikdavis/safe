@@ -25,12 +25,12 @@
 #define OUTPUT_SIZE_Y	(480)
 
 
-void calcAnglesFromVP(cv::Mat &vp, float &theta, float &gamma);
+void calcAnglesFromVP(const cv::Mat &vp, float &theta, float &gamma);
 void calcVPFromAngles(int &x, int &y, float gamma, float theta);
 void calcVpFromAngles(const float &theta, const float &gamma, cv::Point &vp);
 void pointHomogToPointOrig(cv::Mat &invH, cv::Point2f &input, cv::Point &output);
 void generateHomogMat(cv::Mat &H, float theta, float gamma);
-void planeToPlaneHomog(cv::Mat &in, cv::Mat &out, cv::Mat &H, int outputWidth);
+void planeToPlaneHomog(const cv::Mat &in, cv::Mat &out, const cv::Mat &H, int outputWidth);
 
 #endif /* HOMOGRAPHY_HPP_ */
 

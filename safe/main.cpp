@@ -17,14 +17,14 @@
 #include <string>
 
 // Pause after processing each frame
-#define SINGLE_STEP             false
+#define SINGLE_STEP             true
 #define MOTORCYCLE              false
 
 #define PRINT_TIMES             true
 #define PRINT_VP                false
 #define PRINT_ANGLES            false
 #define PRINT_STATS             false
-
+#define DISPLAY_PROCESS_STEPS   true
 
 #define TEST_ALARM              false
 #define RECORD                  false
@@ -65,16 +65,19 @@ int main( int argc, char* argv[] ) {
     cvwin win_a( "processed frame" );
     cvwin win_b( "Birds-eye view" );
 
-    //timer gtimer( "Gaussian blur       " );
-    //timer ltimer( "Lane filter         " );
-    //timer ctimer( "Canny edge detection" );
-    //timer htimer( "Hough transform     " );
-    //timer rtimer( "RANSAC              " );
-    //timer ktimer( "Kalman filter VP    " );
-    //timer hmtimer( "Homography          " );
-    //timer etimer( "EM update           " );
-    //timer itimer( "EM initialization   " );
-    //timer btimer( "Blob detection      " );
+    cv::moveWindow( "processed frame", 0, 0 );
+    cv::moveWindow( "Birds-eye view", 640, 0 );
+
+    timer gtimer( "Gaussian blur       " );
+    timer ltimer( "Lane filter         " );
+    timer ctimer( "Canny edge detection" );
+    timer htimer( "Hough transform     " );
+    timer rtimer( "RANSAC              " );
+    timer ktimer( "Kalman filter VP    " );
+    timer hmtimer( "Homography          " );
+    timer etimer( "EM update           " );
+    timer itimer( "EM initialization   " );
+    timer btimer( "Blob detection      " );
     timer ptimer( "Process frame       " );
     frame_source* fsrc = NULL;
 
@@ -199,34 +202,42 @@ int main( int argc, char* argv[] ) {
         // Throw away upper 1/2 of frame
         cv::Mat(frame, cv::Rect(0,frame.rows>>1,frame.cols,frame.rows>>1)).copyTo(half_frame);
 
+        if ( DISPLAY_PROCESS_STEPS ) imshow( "Halved", half_frame );
+
         /* Gaussian helps preprocess noise out for LMF/Canny/Hough */
-        //gtimer.start();
+        gtimer.start();
         cv::GaussianBlur( half_frame, half_frame, cv::Size(9, 9), 0, 0 );
-        //gtimer.stop();
+        gtimer.stop();
+
+        if ( DISPLAY_PROCESS_STEPS ) imshow( "Half blurred", half_frame );
 
         //** Filter frame for gradient steps up/down horizontally -> lmf_frame
-        //ltimer.start();
+        ltimer.start();
         lane_marker_filter( half_frame, lmf_frame );
         //cv::normalize( lmf_frame, lmf_frame, 0, 255, cv::NORM_MINMAX, CV_8UC1 );
-        //ltimer.stop();
+        ltimer.stop();
+
+        if ( DISPLAY_PROCESS_STEPS ) imshow( "Lane filter", lmf_frame );
 
         //** Perform Canny edge detection on lmf_frame -> lmf_frame
-        //ctimer.start();
+        ctimer.start();
         // src, dst, low threshold, high threshold, kernel size, accurate
         cv::Canny( lmf_frame, lmf_frame, 200, 240, 3, false );
-        //ctimer.stop();
+        ctimer.stop();
+
+        if ( DISPLAY_PROCESS_STEPS ) imshow( "Canny edge detect", lmf_frame );
 
         //** Perform Hough transform on lmf_frame, generating vector of lines
-        //htimer.start();
+        htimer.start();
         std::vector<cv::Vec4i> hlines;
         // src, dst vec, rho, theta, threshold, min length, max gap
         // rho - distance resolution of accumulator in pixels
         // theta - angle resolution of accumulator in pixels
         cv::HoughLinesP( lmf_frame, hlines, 3, CV_PI / 60.0, 50, 20, 10 );
-        //htimer.stop();
+        htimer.stop();
 
         //** RANSAC hough line intersections for vanishing point
-        //rtimer.start();
+        rtimer.start();
         cv::Mat _vp;    // Temporary holder
         std::vector<cv::Point> aux;
         std::vector<std::vector<cv::Point> > lineSegments;
@@ -237,9 +248,9 @@ int main( int argc, char* argv[] ) {
         {
             cv::Point pt1, pt2;
             pt1.x = hlines[i][0];
-            pt1.y = hlines[i][1]+(frame.rows>>1);
+            pt1.y = hlines[i][1] + (frame.rows >> 1);
             pt2.x = hlines[i][2];
-            pt2.y = hlines[i][3]+(frame.rows>>1);
+            pt2.y = hlines[i][3] + (frame.rows >> 1);
 
             // Store into vector of pairs of Points for MSAC
             aux.clear();
@@ -248,11 +259,11 @@ int main( int argc, char* argv[] ) {
             lineSegments.push_back( aux );
         }
         vp_detected = msac.VPEstimation( lineSegments, lineSegmentsClusters, numInliers, _vp );
-        //rtimer.stop();
+        rtimer.stop();
         if ( vp_detected ) msac.drawCS( disp_frame, lineSegmentsClusters, _vp );
 
         /* Process Kalman */
-        //ktimer.start();
+        ktimer.start();
         cv::Mat_<float> pvp(2,1);
         float thetaAng, gammaAng, thetaDelta, gammaDelta, xdelta, ydelta;
         if( vp_detected ) {
@@ -300,7 +311,7 @@ int main( int argc, char* argv[] ) {
             theta.skipMeas();
             gamma.skipMeas();
         }
-        //ktimer.stop();
+        ktimer.stop();
         draw_cross( disp_frame, cv::Point( vp(0,0), vp(1,0) ),
                                  cv::Scalar( 0, 255, 0 ), 4 );
 
@@ -311,13 +322,17 @@ int main( int argc, char* argv[] ) {
 		cv::Point filter_vp;
 		calcVpFromAngles(theta.xHat, gamma.xHat, filter_vp); 
 		cv::circle( disp_frame, filter_vp, 3, cv::Scalar(0, 255, 255 ), 4 );
-                        
+
+        if ( DISPLAY_PROCESS_STEPS ) imshow( "Hough and VP result", disp_frame );
+
         /* Generate IPM or BIRDS-EYE view with plane-to-plane homography */
-        //hmtimer.start();
+        hmtimer.start();
         cv::Mat H;
         generateHomogMat(H, -theta.xHat, -gamma.xHat);
         planeToPlaneHomog(frame, bird_frame, H, 400);
-        //hmtimer.stop();
+        hmtimer.stop();
+
+        if ( DISPLAY_PROCESS_STEPS ) imshow( "Homog", bird_frame );
 
         /* Printing prints estimates of the angles, not raw */
         if ( PRINT_ANGLES ) DMESG( "ANGLE: " << theta.xHat << "," << gamma.xHat );
@@ -328,7 +343,7 @@ int main( int argc, char* argv[] ) {
         if ( PRINT_STATS ) DMESG( "MU: " << mu << " SIGMA: " << sigma );
         
         //** If stats significantly different from last frame, reseed EM algor.
-        //itimer.start();
+        itimer.start();
         if ( ( abs( mu    - prev_mu    ) > MU_DELTA    ) ||
              ( abs( sigma - prev_sigma ) > SIGMA_DELTA ) ) {
             if ( PRINT_STATS )
@@ -337,29 +352,33 @@ int main( int argc, char* argv[] ) {
         }
         prev_mu = mu;
         prev_sigma = sigma;
-        //itimer.stop();
+        itimer.stop();
 
         //** Update EM
-        //etimer.start();
+        etimer.start();
         bayes_seg.EM_Bayes( bird_frame );
-        //etimer.stop();
+        etimer.stop();
 
         //** Create object image
         cv::Mat obj_frame;
         bayes_seg.classSeg( bird_frame, obj_frame, OBJ );
         cv::cvtColor( bird_frame, bird_frame, CV_GRAY2RGB);
 
+        if ( DISPLAY_PROCESS_STEPS ) imshow( "B Segmentation", obj_frame );
+
         //** Perform opening
         cv::Mat kernel = getStructuringElement(cv::MORPH_RECT, cv::Size(5, 5));
         cv::morphologyEx(obj_frame, obj_frame, cv::MORPH_OPEN, kernel);
+
+        if ( DISPLAY_PROCESS_STEPS ) imshow( "Morph Opening", obj_frame );
 
         //** Perform blob detection then passing object candidates through
         // temporal filter. Only blobs that show up in a certain consecutive
         // frame are considered as cars. And only cars are passed through 
         // the extended Kalman filter.
-        //btimer.start();
+        btimer.start();
         car_track.detect_filter( obj_frame );
-        //btimer.stop();
+        btimer.stop();
 
         //** Find the blob bounding boxes
         car_track.findBoundContourBox( obj_frame );
@@ -439,6 +458,14 @@ int main( int argc, char* argv[] ) {
         if ( !alarming ) 
         	alarm.set_interval( 0, 0 ); // Turn off alarm
 
+        // Visualize homography range cutoff
+        cv::Mat invH = H.inv();
+        cv::Point2f htl(0,0), htr(399,0);
+        cv::Point otl, otr;
+        pointHomogToPointOrig(invH, htl, otl);
+        pointHomogToPointOrig(invH, htr, otr);
+        cv::line( disp_frame, otl, otr, cv::Scalar(255,255,0), 1,CV_AA);
+
         ptimer.stop();
 
         if ( RECORD ) outputVideo << disp_frame;
@@ -450,17 +477,17 @@ int main( int argc, char* argv[] ) {
 
         if ( PRINT_TIMES ) {
             // Print timer results
-            //gtimer.printu();
-            //ltimer.printu();
-            //ctimer.printu();
-            //htimer.printu();
-            //rtimer.printu();
-            //ktimer.printu();
-            //hmtimer.printu();
-            //itimer.printu();
-            //etimer.printu();
-            //btimer.printu();
-            //ptimer.printm();
+            gtimer.printu();
+            ltimer.printu();
+            ctimer.printu();
+            htimer.printu();
+            rtimer.printu();
+            ktimer.printu();
+            hmtimer.printu();
+            itimer.printu();
+            etimer.printu();
+            btimer.printu();
+            ptimer.printm();
             std::cout << std::endl;
         }
 
@@ -482,16 +509,16 @@ int main( int argc, char* argv[] ) {
 
     if ( PRINT_TIMES ) {
         // Print average timer results
-        //gtimer.aprintu();
-        //ltimer.aprintu();
-        //ctimer.aprintu();
-        //htimer.aprintu();
-        //rtimer.aprintu();
-        //ktimer.aprintu();
-        //hmtimer.aprintu();
-        //itimer.aprintu();
-        //etimer.aprintu();
-        //btimer.aprintu();
+        gtimer.aprintu();
+        ltimer.aprintu();
+        ctimer.aprintu();
+        htimer.aprintu();
+        rtimer.aprintu();
+        ktimer.aprintu();
+        hmtimer.aprintu();
+        itimer.aprintu();
+        etimer.aprintu();
+        btimer.aprintu();
         ptimer.aprintm();
     }
 
@@ -568,29 +595,35 @@ inline void lane_marker_filter( const cv::Mat &src, cv::Mat &dst ) {
     int tau_cnt = 0;
     int tau = ROTATE_TAU ? MIN_TAU : TAU;
 
-    for ( int row = 0; row < src.rows; ++row ) {
-        const uchar *s = src.ptr<uchar>(row);
-        uchar *d = dst.ptr<uchar>(row);
+    for ( int row = 0; row < src.rows; row += 2 ) {
+        const uchar *s1 = src.ptr<uchar>(row);
+        const uchar *s2 = src.ptr<uchar>(row + 1);
+        uchar *d1 = dst.ptr<uchar>(row);
+        uchar *d2 = dst.ptr<uchar>(row + 1);
 
         for ( int col = 0; col < src.cols; ++col ) {
             // Check that we're within kernel size
-            if ( ( col >= tau ) && ( col <  (src.cols - tau ) ) &&
-                ( row > ( LANE_FILTER_ROW_OFFSET ) ) ) {
+            if ( ( col >= tau ) && ( col <  ( src.cols - tau ) ) ) {
                 // Filter from Nieto 2010
-                aux = 2 * s[col];
-                aux -= s[col - tau];
-                aux -= s[col + tau];
-                aux -= abs( ( s[col - tau] - s[col + tau] ) );
+                aux = s1[col] << 1;
+                aux -= s1[col - tau] + s1[col + tau] + abs( s1[col - tau] - s1[col + tau] );
                 aux = ( aux < 0   ) ? 0   : aux; // Could apply custom threshold
                 aux = ( aux > 255 ) ? 255 : aux; // Could apply custom threshold
-                d[col] = (uchar)aux;
+                d1[col] = (uchar)aux;
+
+                aux = s2[col] << 1;
+                aux -= s2[col - tau] + s2[col + tau] + abs( s2[col - tau] - s2[col + tau] );
+                aux = ( aux < 0   ) ? 0   : aux; // Could apply custom threshold
+                aux = ( aux > 255 ) ? 255 : aux; // Could apply custom threshold
+                d2[col] = (uchar)aux;
             }
-            else d[col] = 0;
+            else {
+                d1[col] = 0;
+                d2[col] = 0;
+            }
         }
-        if ( row > (  LANE_FILTER_ROW_OFFSET ) ) {
-            ++tau_cnt;
-            if ( ( tau_cnt % ( ( src.rows / 2 ) / TAU_DELTA ) ) == 0 ) ++tau;
-        }
+        tau_cnt += 2;
+        if ( ( tau_cnt % ( ( src.rows >> 1 ) / TAU_DELTA ) ) == 0 ) ++tau;
     }
 }
 

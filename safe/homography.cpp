@@ -32,7 +32,7 @@ static cv::Mat Kinv = K.inv();
 cv::Mat vpHomog = cv::Mat::zeros( 3, 1, CV_32FC1);
 
 /* Should ditch degrees since everything is in rads */
-void calcAnglesFromVP(cv::Mat &vp, float &theta, float &gamma) {
+void calcAnglesFromVP(const cv::Mat &vp, float &theta, float &gamma) {
 	//std::cout << vp << std::endl;
 	vpHomog.at<float>(0,0) = vp.at<float>(0,0);
 	vpHomog.at<float>(1,0) = vp.at<float>(1,0);
@@ -99,7 +99,7 @@ void pointHomogToPointOrig(cv::Mat &invH, cv::Point2f &input, cv::Point &output)
 	output.y = cvRound(posOrig.at<float>(1, 0) / posOrig.at<float>(2, 0));
 }
 
-void planeToPlaneHomog(cv::Mat &in, cv::Mat &out, cv::Mat &H, int outputWidth) {
+void planeToPlaneHomog(const cv::Mat &in, cv::Mat &out, const cv::Mat &H, int outputWidth) {
 	warpPerspective(in, out, H, cv::Size(outputWidth, OUTPUT_SIZE_Y));
 }
 
