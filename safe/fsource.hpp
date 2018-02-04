@@ -40,6 +40,7 @@ class fs_image : public frame_source {
 class fs_video : public frame_source {
     public:
         fs_video( std::string file );
+        fs_video( int cameraIndex );
         ~fs_video( void );
 
         int get_frame( cv::Mat &frame );
@@ -48,20 +49,4 @@ class fs_video : public frame_source {
        cv::VideoCapture video;
 };
 
-class FireflyMVCamera; // Forward declare Firefly camera class
-
-class fs_camera : public frame_source {
-    public:
-        fs_camera( void );
-        ~fs_camera( void );
-
-        int get_frame( cv::Mat &frame );
-
-    private:
-        FireflyMVCamera *pFFCam;
-};
-
 #endif // ifndef _FSOURCE_HPP_
-
-
-

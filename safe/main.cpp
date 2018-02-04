@@ -98,7 +98,7 @@ int main( int argc, char* argv[] ) {
     float prev_mu, prev_sigma;
     BayesianSegmentation    bayes_seg;
     CarTracking             car_track;
-    
+
     if (TEST_ALARM) {
     	car_track.initVeloKF(car_track.testObj);
     }
@@ -148,8 +148,8 @@ int main( int argc, char* argv[] ) {
             fsrc = new fs_video( argv[2] );
             break;
         case 'c':
-            DMESG( "Creating camera frame source" );
-            fsrc = new fs_camera( );
+            std::cout << "Creating camera frame source" << std::endl;
+            fsrc = new fs_video( atoi(argv[2]) );
             break;
         default:
             std::cerr << "Unknown argument \"" << argv[1] << '\"' << std::endl;
@@ -282,9 +282,9 @@ int main( int argc, char* argv[] ) {
                 /* Convert _vp from RANSAC to something Kalman filter likes, 2x1 Mat */
                 pvp(1) = _vp.at<float>(1,0);
             }
-            
+
             // If the vanishing point is out of the frame, the point is not good.
-            if ((pvp(0) < 2 * frame.cols / 7) || (pvp(0) > 5 * frame.cols / 7) || 
+            if ((pvp(0) < 2 * frame.cols / 7) || (pvp(0) > 5 * frame.cols / 7) ||
             	(pvp(1) < 2 * frame.rows / 5) || (pvp(1) > 3 * frame.rows / 5)) {
             	theta.skipMeas();
             	gamma.skipMeas();
@@ -320,7 +320,7 @@ int main( int argc, char* argv[] ) {
         if ( IS_NAN( gamma.xHat ) ) gamma.xHat = gammaInit;
 
 		cv::Point filter_vp;
-		calcVpFromAngles(theta.xHat, gamma.xHat, filter_vp); 
+		calcVpFromAngles(theta.xHat, gamma.xHat, filter_vp);
 		cv::circle( disp_frame, filter_vp, 3, cv::Scalar(0, 255, 255 ), 4 );
 
         if ( DISPLAY_PROCESS_STEPS ) imshow( "Hough and VP result", disp_frame );
@@ -338,10 +338,10 @@ int main( int argc, char* argv[] ) {
         if ( PRINT_ANGLES ) DMESG( "ANGLE: " << theta.xHat << "," << gamma.xHat );
 
         //** Calculate homog. intensity feature frame mu and sigma
-        float mu, sigma;        
+        float mu, sigma;
         bayes_seg.mean_stddev( bird_frame, mu, sigma );
         if ( PRINT_STATS ) DMESG( "MU: " << mu << " SIGMA: " << sigma );
-        
+
         //** If stats significantly different from last frame, reseed EM algor.
         itimer.start();
         if ( ( abs( mu    - prev_mu    ) > MU_DELTA    ) ||
@@ -374,7 +374,7 @@ int main( int argc, char* argv[] ) {
 
         //** Perform blob detection then passing object candidates through
         // temporal filter. Only blobs that show up in a certain consecutive
-        // frame are considered as cars. And only cars are passed through 
+        // frame are considered as cars. And only cars are passed through
         // the extended Kalman filter.
         btimer.start();
         car_track.detect_filter( obj_frame );
@@ -395,19 +395,19 @@ int main( int argc, char* argv[] ) {
       		car_track.testObj.Pos = pos;
       		car_track.filterVelo(car_track.testObj);
       		cv::circle( bird_frame, pos, 3, cv::Scalar(0, 255, 0), -1);
-      		
+
       		// draw bounding box for the car in the original frame
 			drawBoundingBox( disp_frame, H, car_track.testObj.filterPos);
-      		
+
       		char zBuffer[35];
-            
+
             snprintf(zBuffer, 35, "%.3f - %.3f", car_track.testObj.filterVelo.x, car_track.testObj.filterVelo.y);
             printText( bird_frame, car_track.testObj.filterPos, cv::Scalar(0, 255, 120), zBuffer);
-      		
+
       		if (checkAlarm(car_track.testObj.filterPos, car_track.testObj.filterVelo)) {
             	// Alert user of potential hazard
                 std::cout << "\033[22;31mALERT!\e[m" << std::endl;
-                if ( !alarming ) 
+                if ( !alarming )
                 {
                 	alarm.set_interval( 0, 100 );
                 	//alarm.play_WAV();
@@ -415,13 +415,13 @@ int main( int argc, char* argv[] ) {
                 alarming = true;
             }
         }
-        else 
+        else
         {
 		    for (unsigned int i = 0; i < car_track.objCands.size(); i++)
 		    {
 		        // show the center point of all blobs detected
 		        cv::circle( bird_frame, car_track.objCands[i].Pos, 3, cv::Scalar(0, 0, 255), -1);
-		        
+
 		        // Only cars will be calculated position and direction
 		        if (car_track.objCands[i].inFilter)
 		        {
@@ -436,26 +436,26 @@ int main( int argc, char* argv[] ) {
 		            cv::line( bird_frame, lstart, lend, cv::Scalar(0, 128, 0), 3);
 
 		            char zBuffer[35];
-		            
+
 		            snprintf(zBuffer, 35, "%d", i);
 		            printText( bird_frame, car_track.objCands[i].filterPos, cv::Scalar(0, 0, 255), zBuffer);
-		            
+
 		            snprintf(zBuffer, 35, "%.3f - %.3f", car_track.objCands[i].filterVelo.x, car_track.objCands[i].filterVelo.y);
 		            printText( bird_frame, car_track.objCands[i].filterPos, cv::Scalar(0, 255, 120), zBuffer);
-		            
+
 		            // draw bounding box for the car in the original frame
 		            drawBoundingBox( disp_frame, H, car_track.objCands[i].filterPos);
 					if (checkAlarm(car_track.objCands[i].filterPos, car_track.objCands[i].filterVelo)) {
 		            	// Alert user of potential hazard
 		                std::cout << "\033[22;31mALERT!\e[m" << std::endl;
-		                if ( !alarming ) 
+		                if ( !alarming )
 		                	alarm.set_interval( 0, 100 );
 		                alarming = true;
-		            }	
+		            }
 		        }
 		    }
 		}
-        if ( !alarming ) 
+        if ( !alarming )
         	alarm.set_interval( 0, 0 ); // Turn off alarm
 
         // Visualize homography range cutoff
@@ -471,7 +471,7 @@ int main( int argc, char* argv[] ) {
         if ( RECORD ) outputVideo << disp_frame;
 
         // Update frame displaysnad box
-        win_a.display_frame( disp_frame ); 
+        win_a.display_frame( disp_frame );
         win_b.display_frame( bird_frame );
 
 
@@ -539,12 +539,12 @@ inline void drawBoundingBox(cv::Mat &img, cv::Mat &H, cv::Point2f &pos)
     pointHomogToPointOrig(invH, pos, origCarPos);
     int w = 	(int)(0.18f*powf((pos.y/15), 2)
     		  	+ 2.5f*(pos.y/15) + 50);
-    
+
     cv::Rect carBox( origCarPos.x - w / 2 , origCarPos.y - 3 * w / 4, w, w);
-    
+
     if (img.channels() != 3)
     	cvtColor( img, img, CV_GRAY2RGB);
-    	
+
     cv::rectangle( img, carBox, cv::Scalar(0, 255, 0), 2, 4, 0 );
     cv::circle( img, origCarPos, 3, cv::Scalar(0, 255, 255), -1);
 }
@@ -567,26 +567,26 @@ inline bool checkAlarm( const cv::Point2f &pos, const cv::Point2f &velo)
             // Alert user of potential hazard
             return true;
         }
-    }	
+    }
     return false;
 }
 
 inline void printText( cv::Mat disp, const cv::Point text_center, cv::Scalar color, char text_buffer[] )
 {
 	int baseline = 0;
-	cv::Size textSize = cv::getTextSize(text_buffer, CV_FONT_HERSHEY_COMPLEX, 0.55, 1, &baseline);  
+	cv::Size textSize = cv::getTextSize(text_buffer, CV_FONT_HERSHEY_COMPLEX, 0.55, 1, &baseline);
 
 	cv::Point 	textOrg;
     // find text position
     if ((text_center.x + textSize.width/2) > disp.cols)
-    	textOrg = cv::Point((disp.cols - textSize.width), 
+    	textOrg = cv::Point((disp.cols - textSize.width),
 		  					(text_center.y - textSize.height/2));
 	else if ((text_center.x - textSize.width/2) < 0)
 		textOrg = cv::Point(0, (text_center.y - textSize.height/2));
 	else
-		textOrg = cv::Point((text_center.x - textSize.width/2), 
+		textOrg = cv::Point((text_center.x - textSize.width/2),
 		  					(text_center.y - textSize.height/2));
-    cv::putText( disp, text_buffer, textOrg, 
+    cv::putText( disp, text_buffer, textOrg,
 		CV_FONT_HERSHEY_COMPLEX, 0.55, color);
 }
 
@@ -680,6 +680,3 @@ inline bool saveImg(const cv::Mat &img, std::string fileNameFormat, int fileNum)
 		sFileName += ("_" + sFileNum + ".pgm");
 	return cv::imwrite(sFileName, save, compression_params);
 }
-
-
-
