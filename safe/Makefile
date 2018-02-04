@@ -2,11 +2,11 @@ CC = g++
 OUTPUT = safe
 CFLAGS += -Wall
 CFLAGS += `sdl-config --cflags`
-CFLAGS += -I/usr/include/flycapture `pkg-config --cflags opencv`
-LIBS += -lflycapture-c `pkg-config --libs opencv`
+CFLAGS += `pkg-config --cflags opencv`
+LIBS += `pkg-config --libs opencv`
 LIBS += `sdl-config --libs`
 
-OBJS += lmmin.o errorNIETO.o MSAC.o fireflymv_camera.o fsource.o cvwin.o
+OBJS += lmmin.o errorNIETO.o MSAC.o fsource.o cvwin.o
 OBJS += timer.o homography.o kalman.o bayesSeg.o sdla.o carTracking.o EKF.o main.o
 
 default : CFLAGS += -O3
@@ -34,18 +34,15 @@ homography.o: homography.cpp homography.hpp
 
 timer.o : timer.cpp timer.hpp
 	$(CC) $(CFLAGS) -c timer.cpp
-	
+
 kalman.o : kalman.cpp kalman.hpp
 	$(CC) $(CFLAGS) -c kalman.cpp
 
 cvwin.o : cvwin.cpp defs.hpp cvwin.hpp
 	$(CC) $(CFLAGS) -c cvwin.cpp
 
-fsource.o : fsource.cpp defs.hpp fsource.hpp fireflymv_camera.hpp
+fsource.o : fsource.cpp defs.hpp fsource.hpp
 	$(CC) $(CFLAGS) -c fsource.cpp
-
-fireflymv_camera.o : fireflymv_camera.cpp defs.hpp fireflymv_camera.hpp
-	$(CC) $(CFLAGS) -c fireflymv_camera.cpp
 
 MSAC.o : MSAC.cpp defs.hpp MSAC.hpp errorNIETO.hpp lmmin.h
 	$(CC) $(CFLAGS) -c MSAC.cpp
@@ -69,6 +66,3 @@ clean:
 	rm -f *.o $(OUTPUT)
 
 .PHONY : default debug clean
-
-
-
