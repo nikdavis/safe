@@ -17,7 +17,7 @@
 #include <string>
 
 // Pause after processing each frame
-#define SINGLE_STEP             true
+#define SINGLE_STEP             false
 #define MOTORCYCLE              false
 
 #define PRINT_TIMES             true
